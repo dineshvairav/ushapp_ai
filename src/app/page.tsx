@@ -1,7 +1,11 @@
+
+"use client";
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { StaticShopLogo } from '@/components/common/StaticShopLogo';
 import { MapPin, Mail, Phone, Facebook, Twitter, Instagram, ShoppingBag, Layers, Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 
 const categoriesSummary = [
   { name: 'Electronics', description: 'Cutting-edge tech and gadgets.', icon: <Sparkles className="h-8 w-8 text-accent" /> },
@@ -11,6 +15,15 @@ const categoriesSummary = [
 ];
 
 export default function WelcomePage() {
+  const [showCategories, setShowCategories] = useState(false);
+  const categoriesSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (showCategories && categoriesSectionRef.current) {
+      categoriesSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showCategories]);
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <header className="py-6 px-4 sm:px-8 flex justify-center items-center sticky top-0 z-50 bg-background/80 backdrop-blur-md shadow-sm">
@@ -28,8 +41,13 @@ export default function WelcomePage() {
             Discover a curated selection of unique products. Quality and style, delivered.
           </p>
           <div className="space-y-4 sm:space-y-0 sm:space-x-4 flex flex-col sm:flex-row">
-            <Button asChild size="lg" variant="outline" className="border-accent text-accent hover:bg-accent hover:text-accent-foreground transition-colors duration-300">
-              <Link href="#know-more">Know More</Link>
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="border-accent text-accent hover:bg-accent hover:text-accent-foreground transition-colors duration-300"
+              onClick={() => setShowCategories(true)}
+            >
+              Know More
             </Button>
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground transition-colors duration-300">
               <Link href="/onboarding">Get Started</Link>
@@ -37,25 +55,31 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        <section id="know-more" className="py-16 md:py-24 bg-background"> {/* Changed background for contrast */}
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl sm:text-4xl font-semibold mb-4 text-primary tracking-tight">Our Product Categories</h2>
-            <p className="text-md sm:text-lg text-muted-foreground max-w-3xl mx-auto mb-12">
-              Explore a wide range of products across various categories. We focus on quality, innovation, and customer satisfaction.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-              {categoriesSummary.map((category) => (
-                <div key={category.name} className="p-6 bg-card rounded-xl shadow-lg hover:shadow-primary/30 transition-shadow duration-300 flex flex-col items-center">
-                  <div className="mb-4 p-3 bg-primary/10 rounded-full">
-                    {category.icon}
+        {showCategories && (
+          <section 
+            ref={categoriesSectionRef} 
+            id="know-more" 
+            className="py-16 md:py-24 bg-background"
+          >
+            <div className="container mx-auto px-4 text-center">
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 text-primary tracking-tight">Our Product Categories</h2>
+              <p className="text-md sm:text-lg text-muted-foreground max-w-3xl mx-auto mb-12">
+                Explore a wide range of products across various categories. We focus on quality, innovation, and customer satisfaction.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+                {categoriesSummary.map((category) => (
+                  <div key={category.name} className="p-6 bg-card rounded-xl shadow-lg hover:shadow-primary/30 transition-shadow duration-300 flex flex-col items-center">
+                    <div className="mb-4 p-3 bg-primary/10 rounded-full">
+                      {category.icon}
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground">{category.name}</h3>
+                    <p className="text-muted-foreground text-sm">{category.description}</p>
                   </div>
-                  <h3 className="text-xl font-semibold mb-2 text-foreground">{category.name}</h3>
-                  <p className="text-muted-foreground text-sm">{category.description}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
 
       <footer className="py-12 bg-card text-card-foreground border-t border-border">
