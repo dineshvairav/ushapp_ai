@@ -14,7 +14,7 @@ import { auth } from '@/lib/firebase'; // Use the initialized auth instance
 // Define the admin email address here.
 // IMPORTANT: For a real app, use Firebase Custom Claims for robust role-based access control.
 // Checking email is not secure for production admin access.
-const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // CHANGE THIS to your admin email
+const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // Ensure this matches your admin email
 
 export default function AdminPage() {
   const router = useRouter();
@@ -99,7 +99,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               View, edit, or manage user accounts and roles.
             </CardDescription>
-            <Button variant="outline" size="sm" disabled>Manage Users</Button>
+            <Button variant="outline" size="sm">Manage Users</Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
@@ -113,7 +113,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Add, edit, or remove products and manage inventory.
             </CardDescription>
-            <Button variant="outline" size="sm" disabled>Manage Products</Button>
+            <Button variant="outline" size="sm">Manage Products</Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
@@ -127,7 +127,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               View traffic, sales reports, and customer insights.
             </CardDescription>
-            <Button variant="outline" size="sm" disabled>View Analytics</Button>
+            <Button variant="outline" size="sm">View Analytics</Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
@@ -141,7 +141,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Configure global application settings and integrations.
             </CardDescription>
-            <Button variant="outline" size="sm" disabled>Configure Settings</Button>
+            <Button variant="outline" size="sm">Configure Settings</Button>
           </CardContent>
         </Card>
          <Card className="hover:shadow-primary/20 transition-shadow">
@@ -155,7 +155,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Manage promotional banners, FAQs, and site content.
             </CardDescription>
-            <Button variant="outline" size="sm" disabled>Edit Content</Button>
+            <Button variant="outline" size="sm">Edit Content</Button>
           </CardContent>
         </Card>
          <Card className="hover:shadow-primary/20 transition-shadow">
@@ -169,7 +169,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Create and manage promotional codes and special offers.
             </CardDescription>
-            <Button variant="outline" size="sm" disabled>Manage Deals</Button>
+            <Button variant="outline" size="sm">Manage Deals</Button>
           </CardContent>
         </Card>
       </div>
