@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import { Button } from '@/components/ui/button';
 import { AuthModal } from '@/components/auth/AuthModal';
-import { GuestLoginSheet } from '@/components/auth/GuestLoginSheet'; // Added import
+import { GuestLoginSheet } from '@/components/auth/GuestLoginSheet';
 import { StaticShopLogo } from '@/components/common/StaticShopLogo';
-import { Zap, ShoppingBag, CheckCircle, Gift } from 'lucide-react';
+import { Zap, ShoppingBag, CheckCircle, Gift, LogIn } from 'lucide-react'; // Added LogIn icon
 import Autoplay from "embla-carousel-autoplay";
 import { cn } from '@/lib/utils';
 
@@ -39,7 +39,7 @@ export default function OnboardingPage() {
   const [api, setApi] = React.useState<CarouselApi>();
   const [current, setCurrent] = React.useState(0);
   const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
-  const [isGuestLoginSheetOpen, setIsGuestLoginSheetOpen] = React.useState(false); // New state
+  const [isGuestLoginSheetOpen, setIsGuestLoginSheetOpen] = React.useState(false);
   const router = useRouter();
 
   React.useEffect(() => {
@@ -49,10 +49,10 @@ export default function OnboardingPage() {
     setCurrent(api.selectedScrollSnap());
     api.on("select", () => {
       setCurrent(api.selectedScrollSnap());
-      if (api.selectedScrollSnap() === onboardingSlides.length - 1) {
-         // Optional: Automatically open modal on last slide after a delay
-        // setTimeout(() => setIsAuthModalOpen(true), 1000);
-      }
+      // Optional: Automatically open modal on last slide after a delay
+      // if (api.selectedScrollSnap() === onboardingSlides.length - 1) {
+      // setTimeout(() => setIsAuthModalOpen(true), 1000);
+      // }
     });
   }, [api]);
 
@@ -61,11 +61,10 @@ export default function OnboardingPage() {
   };
 
   const handleSkip = () => {
-    router.push('/shop'); // Allow skipping to shop page
+    router.push('/shop');
   };
 
   const handleGuestLoginInitiated = () => {
-    // AuthModal calls onOpenChange(false) itself, so we don't need setIsAuthModalOpen(false) here.
     setIsGuestLoginSheetOpen(true);
   };
 
@@ -102,18 +101,33 @@ export default function OnboardingPage() {
         </Carousel>
       </div>
 
-      <div className="flex space-x-2 mt-8 mb-8">
-        {onboardingSlides.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => api?.scrollTo(index)}
-            className={cn(
-              "h-2.5 w-2.5 rounded-full transition-all duration-300 ease-out",
-              current === index ? "w-6 bg-primary" : "bg-muted hover:bg-primary/50"
-            )}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
+      <div className="flex items-center justify-center space-x-4 mt-8 mb-8">
+        <div className="flex space-x-2">
+          {onboardingSlides.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => api?.scrollTo(index)}
+              className={cn(
+                "h-2.5 w-2.5 rounded-full transition-all duration-300 ease-out",
+                current === index ? "w-6 bg-primary" : "bg-muted hover:bg-primary/50"
+              )}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
+        </div>
+        
+        {current !== onboardingSlides.length - 1 && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleGetStarted} 
+            aria-label="Open login/signup"
+            className="text-primary hover:text-primary/80"
+            title="Login or Sign Up"
+          >
+            <LogIn className="h-5 w-5" />
+          </Button>
+        )}
       </div>
       
       {current === onboardingSlides.length - 1 && (
@@ -129,7 +143,7 @@ export default function OnboardingPage() {
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onOpenChange={setIsAuthModalOpen} 
-        onGuestLoginClick={handleGuestLoginInitiated} // Pass the handler
+        onGuestLoginClick={handleGuestLoginInitiated}
       />
       <GuestLoginSheet 
         isOpen={isGuestLoginSheetOpen} 
@@ -160,5 +174,3 @@ export default function OnboardingPage() {
     </div>
   );
 }
-
-    
