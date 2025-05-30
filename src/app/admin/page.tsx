@@ -3,10 +3,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // Added Link
+import Link from 'next/link';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
+import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from '@/lib/firebase';
@@ -105,7 +105,9 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Add, edit, or remove products and manage inventory.
             </CardDescription>
-            <Button variant="outline" size="sm">Manage Products</Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/products">Manage Products</Link>
+            </Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
