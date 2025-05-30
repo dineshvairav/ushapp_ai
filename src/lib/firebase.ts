@@ -11,13 +11,13 @@ import { getAuth, type Auth } from "firebase/auth";
 // Your web app's Firebase configuration
 // IMPORTANT: REPLACE THIS WITH YOUR ACTUAL FIREBASE CONFIGURATION
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY", // Replace with your actual API key
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // Replace with your actual auth domain
-  projectId: "YOUR_PROJECT_ID", // Replace with your actual project ID
-  storageBucket: "YOUR_PROJECT_ID.appspot.com", // Replace with your actual storage bucket
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Replace with your actual messaging sender ID
-  appId: "YOUR_APP_ID", // Replace with your actual app ID
-  // measurementId: "YOUR_MEASUREMENT_ID" // Optional: Replace if you use Google Analytics
+  apiKey: "AIzaSyCnmEM8R74x6Cum5-R9jzjwmlnGoRM1HG8",
+  authDomain: "ushapp-af453.firebaseapp.com",
+  databaseURL: "https://ushapp-af453-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "ushapp-af453",
+  storageBucket: "ushapp-af453.firebasestorage.app",
+  messagingSenderId: "86151688614",
+  appId: "1:86151688614:web:a9de9676de466f66889f67"
 };
 
 // Initialize Firebase

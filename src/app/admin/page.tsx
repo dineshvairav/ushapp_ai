@@ -8,60 +8,42 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-// In a real app, you would import Firebase and its auth methods
-// import { getAuth, onAuthStateChanged } from "firebase/auth";
-// import firebaseApp from '@/lib/firebase'; // Assuming you have a firebase.ts setup
+import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
+import { auth } from '@/lib/firebase'; // Use the initialized auth instance
+
+// Define the admin email address here.
+// IMPORTANT: For a real app, use Firebase Custom Claims for robust role-based access control.
+// Checking email is not secure for production admin access.
+const ADMIN_EMAIL = 'admin@example.com';
 
 export default function AdminPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // SIMULATE Firebase Auth Check
-    // In a real app, you would use onAuthStateChanged to get the current user
-    // and check their custom claims or email for admin privileges.
-    
-    // const auth = getAuth(firebaseApp);
-    // const unsubscribe = onAuthStateChanged(auth, (user) => {
-    //   if (user) {
-    //     // Example: Check if user's email is the admin email
-    //     // This is NOT secure for production. Use custom claims or a backend check.
-    //     const isAdmin = user.email === 'admin@example.com'; 
-    //     setIsAuthorized(isAdmin);
-    //     if (!isAdmin) {
-    //       router.replace('/'); // Redirect non-admins
-    //     }
-    //   } else {
-    //     // No user logged in, redirect to login/onboarding
-    //     router.replace('/onboarding'); 
-    //   }
-    //   setIsLoading(false);
-    // });
-    // return () => unsubscribe(); // Cleanup subscription
-
-    // --- Start of SIMULATED check for prototype ---
-    const MOCK_ADMIN_EMAIL = 'admin@example.com'; // Change this to test
-    const MOCK_CURRENT_USER_EMAIL = 'user@example.com'; // Simulate a logged-in user
-
-    const timeoutId = setTimeout(() => {
-      // Simulate checking if the current user is an admin
-      // To test the admin view, change MOCK_CURRENT_USER_EMAIL to MOCK_ADMIN_EMAIL
-      // or set mockIsAdmin directly to true.
-      const mockIsAdmin = MOCK_CURRENT_USER_EMAIL === MOCK_ADMIN_EMAIL;
-
-      if (mockIsAdmin) {
-        setIsAuthorized(true);
+    const firebaseAuth = getAuth(); // Or directly use the imported 'auth'
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+        // Check if user's email is the admin email
+        // This is NOT secure for production. Use custom claims or a backend check.
+        const isAdmin = user.email === ADMIN_EMAIL;
+        setIsAuthorized(isAdmin);
+        if (!isAdmin) {
+          router.replace('/'); // Redirect non-admins to home
+        }
       } else {
-        // If not authorized, redirect to the home page
-        router.replace('/'); 
+        // No user logged in
+        setCurrentUser(null);
+        setIsAuthorized(false);
+        router.replace('/onboarding'); // Redirect to onboarding/login if not logged in
       }
       setIsLoading(false);
-    }, 1500); // Simulate network delay for auth check
+    });
 
-    return () => clearTimeout(timeoutId);
-    // --- End of SIMULATED check ---
-
+    return () => unsubscribe(); // Cleanup subscription on unmount
   }, [router]);
 
   if (isLoading) {
@@ -98,7 +80,10 @@ export default function AdminPage() {
           </h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Manage your StaticShop application from here. (Access is currently SIMULATED)
+          Manage your StaticShop application. Current admin: {currentUser?.email}
+        </p>
+        <p className="text-sm text-yellow-600 mt-1">
+          (Admin access is currently based on email matching: <code className="bg-yellow-100 text-yellow-800 p-1 rounded text-xs">{ADMIN_EMAIL}</code>. For production, use Firebase Custom Claims.)
         </p>
       </div>
 
@@ -114,7 +99,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               View, edit, or manage user accounts and roles.
             </CardDescription>
-            <Button variant="outline" size="sm">Manage Users</Button>
+            <Button variant="outline" size="sm" disabled>Manage Users</Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
@@ -128,7 +113,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Add, edit, or remove products and manage inventory.
             </CardDescription>
-            <Button variant="outline" size="sm">Manage Products</Button>
+            <Button variant="outline" size="sm" disabled>Manage Products</Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
@@ -142,7 +127,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               View traffic, sales reports, and customer insights.
             </CardDescription>
-            <Button variant="outline" size="sm">View Analytics</Button>
+            <Button variant="outline" size="sm" disabled>View Analytics</Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
@@ -156,7 +141,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Configure global application settings and integrations.
             </CardDescription>
-            <Button variant="outline" size="sm">Configure Settings</Button>
+            <Button variant="outline" size="sm" disabled>Configure Settings</Button>
           </CardContent>
         </Card>
          <Card className="hover:shadow-primary/20 transition-shadow">
@@ -170,7 +155,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Manage promotional banners, FAQs, and site content.
             </CardDescription>
-            <Button variant="outline" size="sm">Edit Content</Button>
+            <Button variant="outline" size="sm" disabled>Edit Content</Button>
           </CardContent>
         </Card>
          <Card className="hover:shadow-primary/20 transition-shadow">
@@ -184,7 +169,7 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Create and manage promotional codes and special offers.
             </CardDescription>
-            <Button variant="outline" size="sm">Manage Deals</Button>
+            <Button variant="outline" size="sm" disabled>Manage Deals</Button>
           </CardContent>
         </Card>
       </div>
@@ -192,20 +177,21 @@ export default function AdminPage() {
       <div className="mt-12 p-6 bg-card border border-border rounded-xl shadow-lg">
         <h3 className="text-xl font-semibold text-primary mb-3">Important Security Note</h3>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          This admin dashboard demonstrates a <strong className="text-foreground">simulated client-side authorization check</strong> for prototyping.
+          This admin dashboard currently uses a <strong className="text-foreground">client-side email check</strong> for authorization.
           In a real-world application, access to this page and its functionalities
-          <strong className="text-foreground"> must be strictly controlled with server-side checks</strong>. This involves:
+          <strong className="text-foreground"> must be strictly controlled with server-side checks and robust role management (e.g., Firebase Custom Claims)</strong>.
         </p>
         <ul className="list-disc list-inside text-sm text-muted-foreground mt-2 space-y-1 pl-2">
-          <li><strong className="text-foreground">Firebase Authentication:</strong> Ensuring only logged-in users can attempt to access this page.</li>
-          <li><strong className="text-foreground">Firebase Custom Claims / Backend Role Verification:</strong> Verifying that the logged-in user has administrative privileges (e.g., an "admin" custom claim or role stored securely). This check should happen on the backend.</li>
-          <li><strong className="text-foreground">Secure Endpoints:</strong> Any actions performed from this dashboard (like updating products or user roles) must also be secured on the backend, verifying admin privileges for each request.</li>
+          <li><strong className="text-foreground">Firebase Authentication:</strong> Ensure only logged-in users can attempt to access this page. (This is now partially implemented).</li>
+          <li><strong className="text-foreground">Firebase Custom Claims / Backend Role Verification:</strong> The recommended approach. Verify that the logged-in user has administrative privileges (e.g., an "admin" custom claim). This check should happen on the backend or be securely verifiable on the client.</li>
+          <li><strong className="text-foreground">Secure Endpoints:</strong> Any actions performed from this dashboard (like updating products or user roles) must also be secured on the backend, verifying admin privileges for each request using the Firebase Admin SDK.</li>
         </ul>
         <p className="text-sm text-muted-foreground mt-3">
-          The current client-side check can be easily bypassed and is <strong className="text-destructive">not suitable for production security</strong>.
-          Use Next.js middleware, API route protection, or Server Action validation with Firebase Admin SDK for robust security.
+          The current client-side email check is for demonstration and is <strong className="text-destructive">not suitable for production security</strong>.
         </p>
       </div>
     </MainAppLayout>
   );
 }
+
+    
