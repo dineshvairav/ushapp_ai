@@ -42,7 +42,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   const handleAuthSuccess = () => {
     onOpenChange(false);
     // In a real app, you'd set auth state and redirect
-    router.push('/shop'); // Example redirect
+    router.push('/'); // Redirect to home page
   };
 
   const handleGuestLogin = () => {
@@ -80,7 +80,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 type="button" 
                 variant="outline" 
                 className="w-full border-input hover:bg-accent/10"
-                onClick={handleAuthSuccess} // Added onClick handler
+                onClick={handleAuthSuccess} 
               >
                 <GoogleIcon /> Sign in with Google
               </Button>
