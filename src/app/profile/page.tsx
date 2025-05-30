@@ -1,12 +1,13 @@
 
 "use client";
 
+import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User, Mail, Edit3, LogOut, FileText, ImageIcon, Download } from 'lucide-react';
+import { User, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera } from 'lucide-react';
 
 // Mock data for admin uploaded files
 const adminFiles = [
@@ -23,6 +24,39 @@ export default function ProfilePage() {
     avatarUrl: 'https://placehold.co/200x200.png', // Placeholder avatar
     joinDate: 'January 15, 2023',
   };
+
+  const [avatarSrc, setAvatarSrc] = useState(user.avatarUrl);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Revoke previous object URL if it exists and is an object URL to prevent memory leaks
+      if (avatarSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(avatarSrc);
+      }
+      const newSrc = URL.createObjectURL(file);
+      setAvatarSrc(newSrc);
+      // Note: In a real app, you would upload 'file' to a server here
+      // and update the user's profile with the new image URL.
+      // This current implementation is for client-side preview only.
+    }
+  };
+
+  // Cleanup object URL on component unmount or when avatarSrc changes to a non-blob URL
+  useEffect(() => {
+    const currentSrc = avatarSrc;
+    return () => {
+      if (currentSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(currentSrc);
+      }
+    };
+  }, [avatarSrc]);
+
 
   const getFileIcon = (fileType: string) => {
     if (fileType === 'pdf') return <FileText className="h-6 w-6 text-primary" />;
@@ -51,10 +85,23 @@ export default function ProfilePage() {
           {/* User Information Card */}
           <Card className="lg:col-span-1 bg-card border-border">
             <CardHeader className="items-center text-center">
-              <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
-                <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="profile avatar" />
-                <AvatarFallback>{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
+              <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0} 
+                   aria-label="Change profile picture">
+                <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
+                  <AvatarImage src={avatarSrc} alt={user.name} data-ai-hint="profile avatar" />
+                  <AvatarFallback>{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <Camera className="h-8 w-8 text-white" />
+                </div>
+              </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                className="hidden"
+              />
               <CardTitle className="text-2xl">{user.name}</CardTitle>
               <CardDescription>{user.email}</CardDescription>
             </CardHeader>
