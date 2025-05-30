@@ -45,8 +45,8 @@ export function CategoryScroller({ selectedCategory, onSelectCategory }: Categor
             className={cn(
               "whitespace-nowrap rounded-full px-4 py-2 text-sm transition-all duration-200 ease-out",
               selectedCategory === category.id
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-secondary hover:bg-accent hover:text-accent-foreground border-border hover:border-accent"
+                ? "shadow-md text-primary-foreground" // variant="default" handles bg-primary. Ensure text is primary-foreground.
+                : "text-muted-foreground border-border hover:border-accent hover:text-accent-foreground" // variant="outline" for bg-background. Customize text & hover.
             )}
           >
             {category.name}
@@ -74,3 +74,4 @@ export function CategoryScroller({ selectedCategory, onSelectCategory }: Categor
     </div>
   );
 }
+
