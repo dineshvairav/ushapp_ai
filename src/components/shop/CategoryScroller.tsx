@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ export function CategoryScroller({ selectedCategory, onSelectCategory }: Categor
       </Button>
       <div
         ref={scrollContainerRef}
-        className="flex space-x-3 overflow-x-auto pb-2 no-scrollbar scroll-smooth px-10 sm:px-12" // Added padding for buttons
+        className="flex flex-nowrap space-x-3 overflow-x-auto pb-2 no-scrollbar scroll-smooth px-10 sm:px-12" // Added flex-nowrap
       >
         {categories.map((category) => (
           <Button
