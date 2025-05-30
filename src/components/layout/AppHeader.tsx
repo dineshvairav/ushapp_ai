@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -15,7 +16,7 @@ import { useState } from 'react';
 
 const navLinks = [
   { href: '/shop', label: 'Shop' },
-  { href: '/categories', label: 'Categories' }, // Example, can link to a specific section or page
+  { href: '/categories', label: 'Categories' },
   { href: '/deals', label: 'Deals' },
 ];
 
@@ -51,9 +52,11 @@ export function AppHeader() {
             <Search className="h-5 w-5" />
             <span className="sr-only">Search</span>
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
-            <UserCircle className="h-5 w-5" />
-            <span className="sr-only">Account</span>
+          <Button asChild variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
+            <Link href="/profile">
+              <UserCircle className="h-5 w-5" />
+              <span className="sr-only">Account</span>
+            </Link>
           </Button>
           <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-primary">
             <ShoppingCart className="h-5 w-5" />
@@ -91,6 +94,18 @@ export function AppHeader() {
                     {link.label}
                   </Link>
                 ))}
+                 {/* Profile link for mobile menu */}
+                <Link
+                    href="/profile"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={cn(
+                      "text-lg transition-colors hover:text-primary py-2 flex items-center",
+                      pathname === "/profile" ? "text-primary font-medium" : "text-muted-foreground"
+                    )}
+                  >
+                    <UserCircle className="mr-2 h-5 w-5" />
+                    Profile
+                  </Link>
               </nav>
             </SheetContent>
           </Sheet>
