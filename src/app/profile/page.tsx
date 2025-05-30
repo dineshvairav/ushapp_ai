@@ -7,7 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera } from 'lucide-react';
+import { User, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone } from 'lucide-react';
+import { EditProfileModal } from '@/components/profile/EditProfileModal';
 
 // Mock data for admin uploaded files
 const adminFiles = [
@@ -16,17 +17,30 @@ const adminFiles = [
   { id: 'file3', name: 'Return Policy.pdf', type: 'pdf', size: '300KB', date: '2024-06-01' },
 ];
 
+export interface UserProfileData {
+  name: string;
+  email: string;
+  avatarUrl: string;
+  joinDate: string;
+  phone: string;
+}
+
 export default function ProfilePage() {
-  // Placeholder user data
-  const user = {
+  const [user, setUser] = useState<UserProfileData>({
     name: 'Alex Doe',
     email: 'alex.doe@example.com',
-    avatarUrl: 'https://placehold.co/200x200.png', // Placeholder avatar
+    avatarUrl: 'https://placehold.co/200x200.png',
     joinDate: 'January 15, 2023',
-  };
+    phone: '555-123-4567',
+  });
 
   const [avatarSrc, setAvatarSrc] = useState(user.avatarUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  useEffect(() => {
+    setAvatarSrc(user.avatarUrl);
+  }, [user.avatarUrl]);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -35,19 +49,21 @@ export default function ProfilePage() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Revoke previous object URL if it exists and is an object URL to prevent memory leaks
       if (avatarSrc.startsWith('blob:')) {
         URL.revokeObjectURL(avatarSrc);
       }
       const newSrc = URL.createObjectURL(file);
       setAvatarSrc(newSrc);
-      // Note: In a real app, you would upload 'file' to a server here
-      // and update the user's profile with the new image URL.
-      // This current implementation is for client-side preview only.
+      // In a real app, you'd upload 'file' and update user.avatarUrl
     }
   };
 
-  // Cleanup object URL on component unmount or when avatarSrc changes to a non-blob URL
+  const handleProfileSave = (updatedUser: UserProfileData) => {
+    setUser(updatedUser);
+    // In a real app, you'd also update the avatarSrc if user.avatarUrl changed
+    // For now, avatar is handled separately for preview.
+  };
+
   useEffect(() => {
     const currentSrc = avatarSrc;
     return () => {
@@ -56,7 +72,6 @@ export default function ProfilePage() {
       }
     };
   }, [avatarSrc]);
-
 
   const getFileIcon = (fileType: string) => {
     if (fileType === 'pdf') return <FileText className="h-6 w-6 text-primary" />;
@@ -76,13 +91,12 @@ export default function ProfilePage() {
               Manage your account details and view your activity.
             </p>
           </div>
-          <Button variant="outline" className="shrink-0">
-            <Edit3 className="mr-2 h-4 w-4" /> Account Settings
+          <Button variant="outline" className="shrink-0" onClick={() => setIsEditModalOpen(true)}>
+            <Edit3 className="mr-2 h-4 w-4" /> Profile Settings
           </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* User Information Card */}
           <Card className="lg:col-span-1 bg-card border-border">
             <CardHeader className="items-center text-center">
               <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0} 
@@ -110,6 +124,10 @@ export default function ProfilePage() {
                 <User className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span>Joined on {user.joinDate}</span>
               </div>
+              <div className="flex items-center text-sm">
+                <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span>{user.phone}</span>
+              </div>
               <Separator />
               <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
                 <LogOut className="mr-2 h-4 w-4" /> Log Out
@@ -117,7 +135,6 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Admin Uploaded Files Card */}
           <Card className="lg:col-span-2 bg-card border-border">
             <CardHeader>
               <CardTitle className="text-xl">Admin Uploaded Files</CardTitle>
@@ -154,7 +171,6 @@ export default function ProfilePage() {
           </Card>
         </div>
 
-        {/* Placeholder for other sections like Order History or My Activity */}
         <Card className="bg-card border-border">
             <CardHeader>
                 <CardTitle className="text-xl">Order History</CardTitle>
@@ -162,12 +178,15 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground text-center py-6">No orders placed yet.</p>
-                {/* In a real app, this would be a list of orders */}
             </CardContent>
         </Card>
-
       </div>
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        currentUser={user}
+        onSave={handleProfileSave}
+      />
     </MainAppLayout>
   );
 }
-

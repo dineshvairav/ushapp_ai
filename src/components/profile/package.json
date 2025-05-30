@@ -1,0 +1,7 @@
+
+      {
+        "name": "@components/profile",
+        "main": "./index.ts",
+        "private": true
+      }
+    
