@@ -77,7 +77,7 @@ export default function ProfilePage() {
             </p>
           </div>
           <Button variant="outline" className="shrink-0">
-            <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
+            <Edit3 className="mr-2 h-4 w-4" /> Account Settings
           </Button>
         </div>
 
@@ -170,3 +170,4 @@ export default function ProfilePage() {
     </MainAppLayout>
   );
 }
+
