@@ -15,14 +15,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AtSign, KeyRound, User, LogIn, UserPlus, Loader2 } from 'lucide-react';
+import { AtSign, KeyRound, User as UserIconLucide, LogIn, UserPlus, Loader2 } from 'lucide-react'; // Renamed User to UserIconLucide to avoid conflict
 import { auth } from '@/lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   GoogleAuthProvider, 
   signInWithPopup,
-  updateProfile
+  updateProfile,
+  type User // Imported User type
 } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,6 +37,10 @@ const GoogleIcon = () => (
     <path d="M1 1h22v22H1z" fill="none"/>
   </svg>
 );
+
+// IMPORTANT: For a real app, use Firebase Custom Claims for robust role-based access control.
+// Checking email is not secure for production admin access.
+const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // Ensure this matches the email in admin/page.tsx
 
 
 interface AuthModalProps {
@@ -56,10 +61,14 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
-  const handleAuthSuccess = (message: string = "Successfully authenticated!") => {
+  const handleAuthSuccess = (loggedInUser: User | null, message: string = "Successfully authenticated!") => {
     toast({ title: "Success", description: message });
     onOpenChange(false);
-    router.push('/shop'); 
+    if (loggedInUser && loggedInUser.email === ADMIN_EMAIL) {
+      router.push('/admin');
+    } else {
+      router.push('/shop'); 
+    }
   };
 
   const handleAuthError = (error: any, defaultMessage: string = "An error occurred.") => {
@@ -97,8 +106,12 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (name.trim() !== '' && userCredential.user) {
         await updateProfile(userCredential.user, { displayName: name });
+         // Re-fetch the user to ensure displayName is fresh if needed, or trust it's updated for the redirect logic
+        const updatedUser = auth.currentUser; // Or userCredential.user which should be up-to-date
+        handleAuthSuccess(updatedUser, "Account created successfully!");
+      } else {
+        handleAuthSuccess(userCredential.user, "Account created successfully!");
       }
-      handleAuthSuccess("Account created successfully!");
     } catch (error) {
       handleAuthError(error, "Could not create account.");
     } finally {
@@ -113,8 +126,8 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
     event.preventDefault();
     setIsLoadingEmail(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      handleAuthSuccess("Signed in successfully!");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      handleAuthSuccess(userCredential.user, "Signed in successfully!");
     } catch (error) {
       handleAuthError(error, "Could not sign in.");
     } finally {
@@ -128,8 +141,8 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
     setIsLoadingGoogle(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      handleAuthSuccess("Signed in with Google successfully!");
+      const result = await signInWithPopup(auth, provider);
+      handleAuthSuccess(result.user, "Signed in with Google successfully!");
     } catch (error) {
       handleAuthError(error, "Could not sign in with Google.");
     } finally {
@@ -249,7 +262,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                <div className="space-y-2">
                 <Label htmlFor="name-signup" className="text-muted-foreground">Full Name</Label>
                 <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <UserIconLucide className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="name-signup" 
                       placeholder="Your Name" 
@@ -257,7 +270,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                       className="pl-10"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      disabled={isLoadingEmail}
+                      disabled={isLoadingEmail || isLoadingGoogle}
                     />
                 </div>
               </div>
@@ -273,7 +286,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                       className="pl-10"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      disabled={isLoadingEmail}
+                      disabled={isLoadingEmail || isLoadingGoogle}
                     />
                 </div>
               </div>
@@ -289,11 +302,11 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                       className="pl-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      disabled={isLoadingEmail}
+                      disabled={isLoadingEmail || isLoadingGoogle}
                     />
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoadingEmail}>
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoadingEmail || isLoadingGoogle}>
                 {isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Create Account
               </Button>
@@ -311,3 +324,5 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
     </Dialog>
   );
 }
+
+    
