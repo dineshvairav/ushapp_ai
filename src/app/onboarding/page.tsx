@@ -8,6 +8,7 @@ import { AuthModal } from '@/components/auth/AuthModal';
 import { StaticShopLogo } from '@/components/common/StaticShopLogo';
 import { Zap, ShoppingBag, CheckCircle, Gift } from 'lucide-react';
 import Autoplay from "embla-carousel-autoplay";
+import { cn } from '@/lib/utils'; // Added import for cn
 
 const onboardingSlides = [
   {
