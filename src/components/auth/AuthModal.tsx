@@ -15,7 +15,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AtSign, KeyRound, User, LogIn, UserPlus } from 'lucide-react';
+import { AtSign, KeyRound, User, LogIn, UserPlus, Loader2 } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  GoogleAuthProvider, 
+  signInWithPopup,
+  updateProfile
+} from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 // Simple Google Icon SVG
 const GoogleIcon = () => (
@@ -37,13 +46,97 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModalProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("signin");
 
-  const handleAuthSuccess = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+
+  const handleAuthSuccess = (message: string = "Successfully authenticated!") => {
+    toast({ title: "Success", description: message });
     onOpenChange(false);
-    // In a real app, you'd set auth state and redirect
-    router.push('/shop'); // Reverted: Redirect to shop page
+    router.push('/shop'); 
   };
+
+  const handleAuthError = (error: any, defaultMessage: string = "An error occurred.") => {
+    console.error("Firebase Auth Error:", error);
+    let errorMessage = defaultMessage;
+    if (error.code) {
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = 'This email address is already in use.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Please enter a valid email address.';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password should be at least 6 characters.';
+          break;
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = 'Invalid email or password.';
+          break;
+        case 'auth/popup-closed-by-user':
+          errorMessage = 'Google Sign-In was closed before completion.';
+          break;
+        default:
+          errorMessage = error.message || defaultMessage;
+      }
+    }
+    toast({ variant: "destructive", title: "Authentication Error", description: errorMessage });
+  };
+
+  const handleEmailSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoadingEmail(true);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      if (name.trim() !== '' && userCredential.user) {
+        await updateProfile(userCredential.user, { displayName: name });
+      }
+      handleAuthSuccess("Account created successfully!");
+    } catch (error) {
+      handleAuthError(error, "Could not create account.");
+    } finally {
+      setIsLoadingEmail(false);
+      setEmail('');
+      setPassword('');
+      setName('');
+    }
+  };
+
+  const handleEmailSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoadingEmail(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      handleAuthSuccess("Signed in successfully!");
+    } catch (error) {
+      handleAuthError(error, "Could not sign in.");
+    } finally {
+      setIsLoadingEmail(false);
+      setEmail('');
+      setPassword('');
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLoadingGoogle(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      handleAuthSuccess("Signed in with Google successfully!");
+    } catch (error) {
+      handleAuthError(error, "Could not sign in with Google.");
+    } finally {
+      setIsLoadingGoogle(false);
+    }
+  };
+
 
   const handleGuestLogin = () => {
     onOpenChange(false);
@@ -53,7 +146,16 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      onOpenChange(open);
+      if (!open) { // Reset fields when modal closes
+        setEmail('');
+        setPassword('');
+        setName('');
+        setIsLoadingEmail(false);
+        setIsLoadingGoogle(false);
+      }
+    }}>
       <DialogContent className="sm:max-w-[480px] bg-card border-border p-8 rounded-xl shadow-2xl">
         <DialogHeader className="mb-4">
           <DialogTitle className="text-2xl font-semibold text-center text-primary">
@@ -75,14 +177,16 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
           </TabsList>
 
           <TabsContent value="signin">
-            <form onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(); }} className="space-y-6">
+            <form onSubmit={handleEmailSignIn} className="space-y-6">
               <Button 
                 variant="outline" 
                 className="w-full border-input hover:bg-accent/10"
-                // Reverted: Removed type="button" and specific onClick.
-                // This button will now submit the form.
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isLoadingGoogle || isLoadingEmail}
               >
-                <GoogleIcon /> Sign in with Google
+                {isLoadingGoogle ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />} 
+                Sign in with Google
               </Button>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -96,24 +200,44 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 <Label htmlFor="email-signin" className="text-muted-foreground">Email</Label>
                 <div className="relative">
                   <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="email-signin" type="email" placeholder="you@example.com" required className="pl-10" />
+                  <Input 
+                    id="email-signin" 
+                    type="email" 
+                    placeholder="you@example.com" 
+                    required 
+                    className="pl-10"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoadingEmail || isLoadingGoogle}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password-signin" className="text-muted-foreground">Password</Label>
                  <div className="relative">
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="password-signin" type="password" placeholder="••••••••" required className="pl-10" />
+                  <Input 
+                    id="password-signin" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    required 
+                    className="pl-10" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoadingEmail || isLoadingGoogle}
+                  />
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoadingEmail || isLoadingGoogle}>
+                {isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Sign In
               </Button>
               <Button 
-                type="button" // Ensure it doesn't submit the form
+                type="button" 
                 variant="link" 
                 onClick={handleGuestLogin} 
                 className="w-full text-accent hover:text-accent/80"
+                disabled={isLoadingEmail || isLoadingGoogle}
               >
                 Login as Guest (Phone No.)
               </Button>
@@ -121,31 +245,59 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
           </TabsContent>
 
           <TabsContent value="signup">
-            <form onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(); }} className="space-y-6">
+            <form onSubmit={handleEmailSignUp} className="space-y-6">
                <div className="space-y-2">
                 <Label htmlFor="name-signup" className="text-muted-foreground">Full Name</Label>
                 <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="name-signup" placeholder="Your Name" required className="pl-10"/>
+                    <Input 
+                      id="name-signup" 
+                      placeholder="Your Name" 
+                      required 
+                      className="pl-10"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      disabled={isLoadingEmail}
+                    />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email-signup" className="text-muted-foreground">Email</Label>
                  <div className="relative">
                     <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="email-signup" type="email" placeholder="you@example.com" required className="pl-10"/>
+                    <Input 
+                      id="email-signup" 
+                      type="email" 
+                      placeholder="you@example.com" 
+                      required 
+                      className="pl-10"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoadingEmail}
+                    />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password-signup" className="text-muted-foreground">Password</Label>
                 <div className="relative">
                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="password-signup" type="password" placeholder="Create a strong password" required className="pl-10"/>
+                    <Input 
+                      id="password-signup" 
+                      type="password" 
+                      placeholder="Create a strong password" 
+                      required 
+                      className="pl-10"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoadingEmail}
+                    />
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoadingEmail}>
+                {isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Create Account
               </Button>
+               {/* Google Sign-In button could also be added here for sign-up if desired */}
             </form>
           </TabsContent>
         </Tabs>
