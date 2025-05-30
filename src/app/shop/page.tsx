@@ -1,3 +1,4 @@
+
 "use client"; // For useState and client-side interactions
 
 import { useState, useMemo } from 'react';
@@ -6,13 +7,17 @@ import { CategoryScroller } from '@/components/shop/CategoryScroller';
 import { ProductCard } from '@/components/shop/ProductCard';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
+
+const ITEMS_PER_PAGE_INITIAL = 5;
 
 export default function ShopPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [showAllProducts, setShowAllProducts] = useState<boolean>(false);
 
-  const filteredProducts = useMemo(() => {
+  const allMatchingProducts = useMemo(() => {
     return allProducts.filter(product => {
       const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -20,6 +25,19 @@ export default function ShopPage() {
       return matchesCategory && matchesSearch;
     });
   }, [selectedCategory, searchTerm]);
+
+  const productsToDisplay = useMemo(() => {
+    if (showAllProducts) {
+      return allMatchingProducts;
+    }
+    return allMatchingProducts.slice(0, ITEMS_PER_PAGE_INITIAL);
+  }, [allMatchingProducts, showAllProducts]);
+
+  const handleClearFilters = () => {
+    setSelectedCategory('all');
+    setSearchTerm('');
+    setShowAllProducts(false);
+  };
 
   return (
     <MainAppLayout>
@@ -39,7 +57,10 @@ export default function ShopPage() {
             type="search"
             placeholder="Search products..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setShowAllProducts(false); // Reset view when search term changes
+            }}
             className="pl-10 bg-card border-border focus:border-primary"
           />
         </div>
@@ -47,12 +68,15 @@ export default function ShopPage() {
       
       <CategoryScroller
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={(category) => {
+          setSelectedCategory(category);
+          setShowAllProducts(false); // Reset view when category changes
+        }}
       />
 
-      {filteredProducts.length > 0 ? (
+      {productsToDisplay.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
-          {filteredProducts.map((product) => (
+          {productsToDisplay.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
@@ -61,12 +85,25 @@ export default function ShopPage() {
           <p className="text-xl text-muted-foreground">No products found matching your criteria.</p>
           { (selectedCategory !== 'all' || searchTerm !== '') && (
             <button 
-              onClick={() => { setSelectedCategory('all'); setSearchTerm(''); }}
+              onClick={handleClearFilters}
               className="mt-4 text-primary hover:underline"
             >
               Clear filters and search
             </button>
           )}
+        </div>
+      )}
+
+      {allMatchingProducts.length > ITEMS_PER_PAGE_INITIAL && !showAllProducts && (
+        <div className="mt-12 text-center">
+          <Button 
+            onClick={() => setShowAllProducts(true)} 
+            size="lg"
+            variant="outline"
+            className="border-accent text-accent hover:bg-accent hover:text-accent-foreground"
+          >
+            View More ({allMatchingProducts.length - ITEMS_PER_PAGE_INITIAL} more)
+          </Button>
         </div>
       )}
     </MainAppLayout>
