@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { User, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone } from 'lucide-react';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
+import Link from 'next/link'; // Import Link
 
 // Mock data for admin uploaded files
 const adminFiles = [
@@ -129,8 +130,10 @@ export default function ProfilePage() {
                 <span>{user.phone}</span>
               </div>
               <Separator />
-              <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
-                <LogOut className="mr-2 h-4 w-4" /> Log Out
+              <Button asChild variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
+                <Link href="/">
+                  <LogOut className="mr-2 h-4 w-4" /> Log Out
+                </Link>
               </Button>
             </CardContent>
           </Card>
