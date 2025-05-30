@@ -21,11 +21,17 @@ export async function generateStaticParams() {
   }));
 }
 
-export default async function ProductDetailsPage({ params: initialParams }: { params: { id: string } }) {
-  // Unwrap params using React.use as suggested by the Next.js console error
-  // We cast to `any` because the original type { id: string } doesn't reflect it being a promise/thenable,
-  // but `use` expects one. This assumes Next.js provides `initialParams` in a `use`-compatible way.
+interface ProductDetailsPageProps {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}
+
+export default async function ProductDetailsPage({ params: initialParams, searchParams: initialSearchParams }: ProductDetailsPageProps) {
+  // Unwrap params and searchParams using React.use as suggested by Next.js console errors
+  // We cast to `any` because the original type doesn't reflect it being a promise/thenable,
+  // but `use` expects one. This assumes Next.js provides these props in a `use`-compatible way.
   const params = use(initialParams as any); 
+  const searchParams = use(initialSearchParams as any); // Unwrapped searchParams, though not used in current logic
 
   const product = await getProduct(params.id);
 
