@@ -1,7 +1,7 @@
 
 import Link from 'next/link';
 import { StaticShopLogo } from '@/components/common/StaticShopLogo';
-import { Mail, Phone, Facebook, Twitter, Instagram, MapPin } from 'lucide-react';
+import { Mail, Phone, Facebook, Twitter, Instagram, MapPin, ShieldCheck } from 'lucide-react'; // Added ShieldCheck
 
 export function AppFooter() {
   return (
@@ -21,10 +21,9 @@ export function AppFooter() {
           <div>
             <h3 className="text-md font-semibold mb-3 text-foreground uppercase tracking-wider">Shop</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/categories/electronics" className="text-muted-foreground hover:text-primary transition-colors">Electronics</Link></li>
-              <li><Link href="/categories/fashion" className="text-muted-foreground hover:text-primary transition-colors">Fashion</Link></li>
-              <li><Link href="/categories/home-goods" className="text-muted-foreground hover:text-primary transition-colors">Home Goods</Link></li>
+              <li><Link href="/categories" className="text-muted-foreground hover:text-primary transition-colors">Categories</Link></li>
               <li><Link href="/deals" className="text-muted-foreground hover:text-primary transition-colors">Special Deals</Link></li>
+              <li><Link href="/shop" className="text-muted-foreground hover:text-primary transition-colors">All Products</Link></li>
             </ul>
           </div>
 
@@ -35,6 +34,11 @@ export function AppFooter() {
               <li><Link href="/faq" className="text-muted-foreground hover:text-primary transition-colors">FAQ</Link></li>
               <li><Link href="/shipping" className="text-muted-foreground hover:text-primary transition-colors">Shipping & Returns</Link></li>
               <li><Link href="/privacy" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy</Link></li>
+              <li>
+                <Link href="/admin" className="text-muted-foreground hover:text-primary transition-colors flex items-center">
+                  <ShieldCheck size={16} className="mr-1.5 text-primary/80" /> Admin Panel
+                </Link>
+              </li>
             </ul>
           </div>
           
