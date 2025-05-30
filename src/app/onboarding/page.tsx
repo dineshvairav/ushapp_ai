@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -5,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import { Button } from '@/components/ui/button';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { GuestLoginSheet } from '@/components/auth/GuestLoginSheet'; // Added import
 import { StaticShopLogo } from '@/components/common/StaticShopLogo';
 import { Zap, ShoppingBag, CheckCircle, Gift } from 'lucide-react';
 import Autoplay from "embla-carousel-autoplay";
-import { cn } from '@/lib/utils'; // Added import for cn
+import { cn } from '@/lib/utils';
 
 const onboardingSlides = [
   {
@@ -37,6 +39,7 @@ export default function OnboardingPage() {
   const [api, setApi] = React.useState<CarouselApi>();
   const [current, setCurrent] = React.useState(0);
   const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
+  const [isGuestLoginSheetOpen, setIsGuestLoginSheetOpen] = React.useState(false); // New state
   const router = useRouter();
 
   React.useEffect(() => {
@@ -59,6 +62,11 @@ export default function OnboardingPage() {
 
   const handleSkip = () => {
     router.push('/shop'); // Allow skipping to shop page
+  };
+
+  const handleGuestLoginInitiated = () => {
+    // AuthModal calls onOpenChange(false) itself, so we don't need setIsAuthModalOpen(false) here.
+    setIsGuestLoginSheetOpen(true);
   };
 
   return (
@@ -118,7 +126,15 @@ export default function OnboardingPage() {
         </Button>
       )}
 
-      <AuthModal isOpen={isAuthModalOpen} onOpenChange={setIsAuthModalOpen} />
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onOpenChange={setIsAuthModalOpen} 
+        onGuestLoginClick={handleGuestLoginInitiated} // Pass the handler
+      />
+      <GuestLoginSheet 
+        isOpen={isGuestLoginSheetOpen} 
+        onOpenChange={setIsGuestLoginSheetOpen} 
+      />
 
       <style jsx global>{`
         @keyframes fadeIn {
@@ -144,3 +160,5 @@ export default function OnboardingPage() {
     </div>
   );
 }
+
+    

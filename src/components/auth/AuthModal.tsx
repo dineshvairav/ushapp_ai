@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -14,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AtSign, KeyRound, Smartphone, User, LogIn, UserPlus } from 'lucide-react';
+import { AtSign, KeyRound, User, LogIn, UserPlus } from 'lucide-react';
 
 // Simple Google Icon SVG
 const GoogleIcon = () => (
@@ -31,9 +32,10 @@ const GoogleIcon = () => (
 interface AuthModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  onGuestLoginClick?: () => void; // New prop
 }
 
-export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
+export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModalProps) {
   const router = useRouter(); // For actual navigation post-auth
   const [activeTab, setActiveTab] = useState("signin");
 
@@ -41,6 +43,13 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
     onOpenChange(false);
     // In a real app, you'd set auth state and redirect
     router.push('/shop'); // Example redirect
+  };
+
+  const handleGuestLogin = () => {
+    onOpenChange(false); // Close this modal
+    if (onGuestLoginClick) {
+      onGuestLoginClick(); // Trigger opening the phone input sheet
+    }
   };
 
   return (
@@ -95,7 +104,12 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Sign In
               </Button>
-              <Button variant="link" className="w-full text-accent hover:text-accent/80">
+              <Button 
+                type="button" // Ensure it doesn't submit the form
+                variant="link" 
+                onClick={handleGuestLogin} 
+                className="w-full text-accent hover:text-accent/80"
+              >
                 Login as Guest (Phone No.)
               </Button>
             </form>
@@ -140,3 +154,5 @@ export function AuthModal({ isOpen, onOpenChange }: AuthModalProps) {
     </Dialog>
   );
 }
+
+    
