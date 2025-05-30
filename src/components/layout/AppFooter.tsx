@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import { StaticShopLogo } from '@/components/common/StaticShopLogo';
 import { Mail, Phone, Facebook, Twitter, Instagram, MapPin } from 'lucide-react';
@@ -40,9 +41,9 @@ export function AppFooter() {
           <div>
             <h3 className="text-md font-semibold mb-3 text-foreground uppercase tracking-wider">Connect</h3>
              <div className="space-y-2 text-sm">
-                <div className="flex items-center space-x-2 text-muted-foreground">
+                <div className="flex items-center space-x-2">
                   <MapPin size={16} className="text-primary" />
-                  <span>123 Static Way, Webville</span>
+                  <a href="https://www.google.com/maps/search/?api=1&query=123+Static+Way,+Webville" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">123 Static Way, Webville</a>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Mail size={16} className="text-primary" />
@@ -50,7 +51,7 @@ export function AppFooter() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone size={16} className="text-primary" />
-                  <span className="text-muted-foreground">+1 (555) 123-4567</span>
+                  <a href="tel:+15551234567" className="text-muted-foreground hover:text-primary transition-colors">+1 (555) 123-4567</a>
                 </div>
               </div>
             <div className="flex space-x-3 mt-4">

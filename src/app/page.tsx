@@ -86,20 +86,20 @@ export default function WelcomePage() {
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
           <div>
             <h3 className="text-lg font-semibold mb-3 text-primary">Location</h3>
-            <div className="flex items-center justify-center md:justify-start space-x-2 text-muted-foreground">
+            <div className="flex items-center justify-center md:justify-start space-x-2">
               <MapPin size={18} />
-              <span>123 Static Way, Webville, Internet</span>
+              <a href="https://www.google.com/maps/search/?api=1&query=123+Static+Way,+Webville,+Internet" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-accent transition-colors">123 Static Way, Webville, Internet</a>
             </div>
           </div>
           <div>
             <h3 className="text-lg font-semibold mb-3 text-primary">Contact Us</h3>
-            <div className="flex items-center justify-center md:justify-start space-x-2 mb-1 text-muted-foreground">
+            <div className="flex items-center justify-center md:justify-start space-x-2 mb-1">
               <Mail size={18} />
-              <a href="mailto:info@staticshop.com" className="hover:text-accent transition-colors">info@staticshop.com</a>
+              <a href="mailto:info@staticshop.com" className="text-muted-foreground hover:text-accent transition-colors">info@staticshop.com</a>
             </div>
-            <div className="flex items-center justify-center md:justify-start space-x-2 text-muted-foreground">
+            <div className="flex items-center justify-center md:justify-start space-x-2">
               <Phone size={18} />
-              <span>+1 (555) 123-4567</span>
+              <a href="tel:+15551234567" className="text-muted-foreground hover:text-accent transition-colors">+1 (555) 123-4567</a>
             </div>
           </div>
           <div>
