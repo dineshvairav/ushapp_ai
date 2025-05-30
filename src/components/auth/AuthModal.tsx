@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // Or next/link for static
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,23 +32,23 @@ const GoogleIcon = () => (
 interface AuthModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onGuestLoginClick?: () => void; // New prop
+  onGuestLoginClick?: () => void;
 }
 
 export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModalProps) {
-  const router = useRouter(); // For actual navigation post-auth
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("signin");
 
   const handleAuthSuccess = () => {
     onOpenChange(false);
     // In a real app, you'd set auth state and redirect
-    router.push('/'); // Redirect to home page
+    router.push('/shop'); // Reverted: Redirect to shop page
   };
 
   const handleGuestLogin = () => {
-    onOpenChange(false); // Close this modal
+    onOpenChange(false);
     if (onGuestLoginClick) {
-      onGuestLoginClick(); // Trigger opening the phone input sheet
+      onGuestLoginClick();
     }
   };
 
@@ -77,10 +77,10 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
           <TabsContent value="signin">
             <form onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(); }} className="space-y-6">
               <Button 
-                type="button" 
                 variant="outline" 
                 className="w-full border-input hover:bg-accent/10"
-                onClick={handleAuthSuccess} 
+                // Reverted: Removed type="button" and specific onClick.
+                // This button will now submit the form.
               >
                 <GoogleIcon /> Sign in with Google
               </Button>
