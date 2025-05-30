@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
-import { use } from 'react'; // Ensure 'use' is imported from React
 
 // Helper function to get product by ID (simulates API call)
 async function getProduct(id: string): Promise<ProductType | undefined> {
@@ -22,15 +21,11 @@ export async function generateStaticParams() {
 }
 
 interface ProductDetailsPageProps {
-  params: Promise<{ id: string }>; // Changed to Promise
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>; // Changed to Promise
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
 }
 
-export default async function ProductDetailsPage(props: ProductDetailsPageProps) {
-  // Unwrap props using React.use()
-  const params = use(props.params);
-  const searchParams = use(props.searchParams); // Even if not used, unwrap if typed as Promise
-
+export default async function ProductDetailsPage({ params, searchParams }: ProductDetailsPageProps) {
   const product = await getProduct(params.id);
 
   if (!product) {
