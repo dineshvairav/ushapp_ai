@@ -1,10 +1,9 @@
 
-import { use } from 'react'; // Import React.use
 import { products, type Product as ProductType } from '@/data/products';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Star, ChevronLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
@@ -26,12 +25,9 @@ interface ProductDetailsPageProps {
   searchParams: { [key: string]: string | string[] | undefined };
 }
 
-export default async function ProductDetailsPage({ params: initialParams, searchParams: initialSearchParams }: ProductDetailsPageProps) {
-  // Unwrap params and searchParams using React.use as suggested by Next.js console errors
-  // We cast to `any` because the original type doesn't reflect it being a promise/thenable,
-  // but `use` expects one. This assumes Next.js provides these props in a `use`-compatible way.
-  const params = use(initialParams as any); 
-  const searchParams = use(initialSearchParams as any); // Unwrapped searchParams, though not used in current logic
+export default async function ProductDetailsPage({ params, searchParams }: ProductDetailsPageProps) {
+  // params and searchParams are used directly from props as per standard Next.js Server Component pattern.
+  // The React.use() wrapper was removed as it might cause issues on client-side navigation if props are already resolved.
 
   const product = await getProduct(params.id);
 
