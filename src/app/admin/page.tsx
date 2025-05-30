@@ -3,18 +3,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // Added Link
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
+import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase'; // Use the initialized auth instance
+import { auth } from '@/lib/firebase';
 
-// Define the admin email address here.
-// IMPORTANT: For a real app, use Firebase Custom Claims for robust role-based access control.
-// Checking email is not secure for production admin access.
-const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // Ensure this matches your admin email
+const ADMIN_EMAIL = 'dineshvairav@gmail.com';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -23,27 +20,23 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Directly use the imported 'auth' instance
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        // Check if user's email is the admin email
-        // This is NOT secure for production. Use custom claims or a backend check.
         const isAdmin = user.email === ADMIN_EMAIL;
         setIsAuthorized(isAdmin);
         if (!isAdmin) {
-          router.replace('/'); // Redirect non-admins to home
+          router.replace('/');
         }
       } else {
-        // No user logged in
         setCurrentUser(null);
         setIsAuthorized(false);
-        router.replace('/onboarding'); // Redirect to onboarding/login if not logged in
+        router.replace('/onboarding');
       }
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, [router]);
 
   if (isLoading) {
@@ -58,8 +51,6 @@ export default function AdminPage() {
   }
 
   if (!isAuthorized) {
-    // This should ideally not be seen as the redirect would have happened.
-    // It's a fallback or for the brief moment before redirect completes.
     return (
       <MainAppLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -69,7 +60,6 @@ export default function AdminPage() {
     );
   }
 
-  // If authorized, render the admin dashboard
   return (
     <MainAppLayout>
       <div className="mb-8">
@@ -99,7 +89,9 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               View, edit, or manage user accounts and roles.
             </CardDescription>
-            <Button variant="outline" size="sm">Manage Users</Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/users">Manage Users</Link>
+            </Button>
           </CardContent>
         </Card>
         <Card className="hover:shadow-primary/20 transition-shadow">
