@@ -8,13 +8,13 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from '@/lib/firebase'; // Use the initialized auth instance
 
 // Define the admin email address here.
 // IMPORTANT: For a real app, use Firebase Custom Claims for robust role-based access control.
 // Checking email is not secure for production admin access.
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // CHANGE THIS to your admin email
 
 export default function AdminPage() {
   const router = useRouter();
@@ -23,8 +23,8 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const firebaseAuth = getAuth(); // Or directly use the imported 'auth'
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+    // Directly use the imported 'auth' instance
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
         // Check if user's email is the admin email
@@ -193,5 +193,3 @@ export default function AdminPage() {
     </MainAppLayout>
   );
 }
-
-    
