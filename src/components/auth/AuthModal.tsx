@@ -76,7 +76,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
 
           <TabsContent value="signin">
             <form onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(); }} className="space-y-6">
-              <Button variant="outline" className="w-full border-input hover:bg-accent/10">
+              <Button type="button" variant="outline" className="w-full border-input hover:bg-accent/10">
                 <GoogleIcon /> Sign in with Google
               </Button>
               <div className="relative">
