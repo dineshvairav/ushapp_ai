@@ -21,11 +21,14 @@ export async function generateStaticParams() {
 }
 
 interface ProductDetailsPageProps {
-  params: { id: string };
-  searchParams: { [key: string]: string | string[] | undefined };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function ProductDetailsPage({ params, searchParams }: ProductDetailsPageProps) {
+export default async function ProductDetailsPage(props: ProductDetailsPageProps) {
+  const params = await props.params;
+  // const searchParams = await props.searchParams; // searchParams not currently used, can be awaited if needed
+
   const product = await getProduct(params.id);
 
   if (!product) {
