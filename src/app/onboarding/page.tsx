@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 const onboardingSlides = [
   {
     icon: <Zap size={64} className="text-primary mb-6" />,
-    title: "Welcome to StaticShop!",
+    title: "Welcome to ushªOªpp!",
     description: "Discover a world of curated products, handpicked for quality and style. Your next favorite item is just a click away.",
   },
   {

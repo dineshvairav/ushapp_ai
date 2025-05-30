@@ -55,7 +55,7 @@ export function AppFooter() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone size={16} className="text-primary" />
-                  <a href="tel:+15551234567" className="text-muted-foreground hover:text-primary transition-colors">+1 (555) 123-4567</a>
+                  <a href="tel:+15551234567" className="text-muted-foreground hover:text-primary transition-colors">+91 (996) 129-5835</a>
                 </div>
               </div>
             <div className="flex space-x-3 mt-4">

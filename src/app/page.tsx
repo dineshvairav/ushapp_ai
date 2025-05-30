@@ -35,7 +35,7 @@ export default function WelcomePage() {
       <main className="flex-grow">
         <section className="flex flex-col items-center justify-center p-4 text-center min-h-[calc(100vh-200px-4rem)] sm:min-h-[calc(100vh-200px-5rem)]">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 tracking-tight">
-            Welcome to <span className="text-primary">StaticShop</span>
+            Welcome to <span className="text-primary">ushªOªpp</span>
           </h1>
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mb-10">
             Discover a curated selection of unique products. Quality and style, delivered.
@@ -88,18 +88,18 @@ export default function WelcomePage() {
             <h3 className="text-lg font-semibold mb-3 text-primary">Location</h3>
             <div className="flex items-center justify-center md:justify-start space-x-2">
               <MapPin size={18} />
-              <a href="https://www.google.com/maps/search/?api=1&query=123+Static+Way,+Webville,+Internet" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-accent transition-colors">123 Static Way, Webville, Internet</a>
+              <a href="https://maps.app.goo.gl/6tUDuyAkT62byw3Z9" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-accent transition-colors">IX, Usha Building, Fancy Bazaar, Changanacherry</a>
             </div>
           </div>
           <div>
             <h3 className="text-lg font-semibold mb-3 text-primary">Contact Us</h3>
             <div className="flex items-center justify-center md:justify-start space-x-2 mb-1">
               <Mail size={18} />
-              <a href="mailto:info@staticshop.com" className="text-muted-foreground hover:text-accent transition-colors">info@staticshop.com</a>
+              <a href="mailto:ushaagency1960@gmail.com" className="text-muted-foreground hover:text-accent transition-colors">info@usha1960.trade</a>
             </div>
             <div className="flex items-center justify-center md:justify-start space-x-2">
               <Phone size={18} />
-              <a href="tel:+15551234567" className="text-muted-foreground hover:text-accent transition-colors">+1 (555) 123-4567</a>
+              <a href="tel:9961295835" className="text-muted-foreground hover:text-accent transition-colors">+91 (996) 129-5835</a>
             </div>
           </div>
           <div>
@@ -112,7 +112,7 @@ export default function WelcomePage() {
           </div>
         </div>
         <div className="text-center text-sm text-muted-foreground mt-8 pt-8 border-t border-border/50">
-          <p>&copy; {new Date().getFullYear()} StaticShop. All rights reserved. Designed with passion.</p>
+          <p>&copy; {new Date().getFullYear()} ushªOªpp. All rights reserved. Designed with passion.</p>
         </div>
       </footer>
     </div>
