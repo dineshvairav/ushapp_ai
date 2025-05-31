@@ -70,7 +70,7 @@ export default function AdminPage() {
           </h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Manage your StaticShop application. Current admin: {currentUser?.email}
+          Manage your ushªOªpp application. Current admin: {currentUser?.email}
         </p>
         <p className="text-sm text-yellow-600 mt-1">
           (Admin access is currently based on email matching: <code className="bg-yellow-100 text-yellow-800 p-1 rounded text-xs">{ADMIN_EMAIL}</code>. For production, use Firebase Custom Claims.)

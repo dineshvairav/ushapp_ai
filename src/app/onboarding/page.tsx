@@ -31,7 +31,7 @@ const onboardingSlides = [
   {
     icon: <CheckCircle size={64} className="text-primary mb-6" />,
     title: "Ready to Get Started?",
-    description: "Sign up or log in to personalize your experience, save your favorites, and start exploring the best of StaticShop.",
+    description: "Sign up or log in to personalize your experience, save your favorites, and start exploring the best of ushªOªpp.",
   },
 ];
 

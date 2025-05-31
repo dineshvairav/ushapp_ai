@@ -9,9 +9,9 @@ export function AppFooter() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8 mb-8">
           <div className="lg:col-span-1">
-            <Link href="/shop" className="inline-flex items-center gap-2 mb-4" aria-label="StaticShop Home">
+            <Link href="/shop" className="inline-flex items-center gap-2 mb-4" aria-label="ushªOªpp Home">
               <StaticShopLogo className="h-10 w-10" />
-              <span className="font-bold text-xl text-primary">StaticShop</span>
+              <span className="font-bold text-xl text-primary">ushªOªpp</span>
             </Link>
             <p className="text-sm text-muted-foreground">
               Curated products for a modern lifestyle. Quality and design at your fingertips.
@@ -47,15 +47,15 @@ export function AppFooter() {
              <div className="space-y-2 text-sm">
                 <div className="flex items-center space-x-2">
                   <MapPin size={16} className="text-primary" />
-                  <a href="https://www.google.com/maps/search/?api=1&query=123+Static+Way,+Webville" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">123 Static Way, Webville</a>
+                  <a href="https://maps.app.goo.gl/6tUDuyAkT62byw3Z9" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">IX, Usha Building, Fancy Bazaar, Changanacherry</a>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Mail size={16} className="text-primary" />
-                  <a href="mailto:info@staticshop.com" className="text-muted-foreground hover:text-primary transition-colors">info@staticshop.com</a>
+                  <a href="mailto:ushaagency1960@gmail.com" className="text-muted-foreground hover:text-primary transition-colors">info@usha190.trade</a>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone size={16} className="text-primary" />
-                  <a href="tel:+15551234567" className="text-muted-foreground hover:text-primary transition-colors">+91 (996) 129-5835</a>
+                  <a href="tel:9961295835" className="text-muted-foreground hover:text-primary transition-colors">+91 (996) 129-5835</a>
                 </div>
               </div>
             <div className="flex space-x-3 mt-4">
@@ -67,7 +67,7 @@ export function AppFooter() {
         </div>
         
         <div className="text-center text-xs text-muted-foreground pt-8 border-t border-border/50">
-          <p>&copy; {new Date().getFullYear()} StaticShop. All Rights Reserved. Minimalist design for maximum style.</p>
+          <p>&copy; {new Date().getFullYear()} ushªOªpp. All Rights Reserved. Minimalist design for maximum style.</p>
         </div>
       </div>
     </footer>

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'StaticShop',
+  title: 'ushªOªpp',
   description: 'Your destination for curated static products.',
 };
 

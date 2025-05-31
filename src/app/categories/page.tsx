@@ -9,8 +9,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import * as LucideIcons from 'lucide-react';
 
 // export const metadata: Metadata = { // Metadata should be defined in Server Components or layout files
-//   title: 'Product Categories - StaticShop',
-//   description: 'Browse all product categories available at StaticShop.',
+//   title: 'Product Categories - ushªOªpp',
+//   description: 'Browse all product categories available at ushªOªpp.',
 // };
 
 export default function CategoriesPage() {

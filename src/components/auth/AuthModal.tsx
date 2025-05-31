@@ -175,7 +175,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
             {activeTab === "signin" ? "Welcome Back!" : "Create Account"}
           </DialogTitle>
           <DialogDescription className="text-center text-muted-foreground">
-            {activeTab === "signin" ? "Sign in to continue your shopping journey." : "Join StaticShop to discover amazing products."}
+            {activeTab === "signin" ? "Sign in to continue your shopping journey." : "Join ushªOªpp to discover amazing products."}
           </DialogDescription>
         </DialogHeader>
         
@@ -317,7 +317,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
         
         <DialogFooter className="mt-6">
           <p className="text-xs text-muted-foreground text-center w-full">
-            By continuing, you agree to StaticShop's Terms of Service and Privacy Policy.
+            By continuing, you agree to ushªOªpp's Terms of Service and Privacy Policy.
           </p>
         </DialogFooter>
       </DialogContent>

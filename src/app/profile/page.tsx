@@ -198,7 +198,7 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="text-xl">Admin Uploaded Files</CardTitle>
               <CardDescription>
-                Important documents and images shared by the StaticShop team.
+                Important documents and images shared by the ushªOªppteam.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -9,8 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Percent } from 'lucide-react';
 
 // export const metadata: Metadata = { // Metadata should be defined in Server Components or layout files
-//   title: 'Special Deals - StaticShop',
-//   description: 'Check out the latest special deals and offers at StaticShop.',
+//   title: 'Special Deals - ushªOªpp',
+//   description: 'Check out the latest special deals and offers at ushªOªpp.',
 // };
 
 // For demonstration, let's pick the first 3 products as "deals"
