@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AtSign, KeyRound, User as UserIconLucide, LogIn, UserPlus, Loader2 } from 'lucide-react'; // Renamed User to UserIconLucide to avoid conflict
-import { auth } from '@/lib/firebase';
+import { auth as firebaseAuthInstance } from '@/lib/firebase'; // Use the imported auth instance
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -61,6 +61,14 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
+  const showAuthUnavailableToast = () => {
+    toast({
+      variant: "destructive",
+      title: "Authentication Error",
+      description: "Authentication service is currently unavailable. Please try again later or check your configuration.",
+    });
+  };
+
   const handleAuthSuccess = (loggedInUser: User | null, message: string = "Successfully authenticated!") => {
     toast({ title: "Success", description: message });
     onOpenChange(false);
@@ -101,13 +109,18 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
 
   const handleEmailSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!firebaseAuthInstance) {
+      setIsLoadingEmail(false);
+      showAuthUnavailableToast();
+      return;
+    }
     setIsLoadingEmail(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(firebaseAuthInstance, email, password);
       if (name.trim() !== '' && userCredential.user) {
         await updateProfile(userCredential.user, { displayName: name });
          // Re-fetch the user to ensure displayName is fresh if needed, or trust it's updated for the redirect logic
-        const updatedUser = auth.currentUser; // Or userCredential.user which should be up-to-date
+        const updatedUser = firebaseAuthInstance.currentUser; // Or userCredential.user which should be up-to-date
         handleAuthSuccess(updatedUser, "Account created successfully!");
       } else {
         handleAuthSuccess(userCredential.user, "Account created successfully!");
@@ -124,9 +137,14 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
 
   const handleEmailSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!firebaseAuthInstance) {
+      setIsLoadingEmail(false);
+      showAuthUnavailableToast();
+      return;
+    }
     setIsLoadingEmail(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(firebaseAuthInstance, email, password);
       handleAuthSuccess(userCredential.user, "Signed in successfully!");
     } catch (error) {
       handleAuthError(error, "Could not sign in.");
@@ -138,10 +156,15 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   };
 
   const handleGoogleSignIn = async () => {
+    if (!firebaseAuthInstance) {
+      setIsLoadingGoogle(false);
+      showAuthUnavailableToast();
+      return;
+    }
     setIsLoadingGoogle(true);
     const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(firebaseAuthInstance, provider);
       handleAuthSuccess(result.user, "Signed in with Google successfully!");
     } catch (error) {
       handleAuthError(error, "Could not sign in with Google.");
@@ -324,5 +347,4 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
     </Dialog>
   );
 }
-
     
