@@ -28,7 +28,7 @@ export default function WelcomePage() {
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <header className="py-6 px-4 sm:px-8 flex justify-center items-center">
         <Link href="/" aria-label="ushªOªpp Home">
-          <StaticShopLogo className="h-12 w-12 sm:h-16 sm:w-16" />
+          <StaticShopLogo width={64} height={64} alt="ushªOªpp Logo"/>
         </Link>
       </header>
 

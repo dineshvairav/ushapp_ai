@@ -10,7 +10,7 @@ export function AppFooter() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8 mb-8">
           <div className="lg:col-span-1">
             <Link href="/shop" className="inline-flex items-center gap-2 mb-4" aria-label="ushªOªpp Home">
-              <StaticShopLogo className="h-10 w-10" />
+              <StaticShopLogo width={40} height={40} alt="ushªOªpp Logo" />
               <span className="font-bold text-xl text-primary">ushªOªpp</span>
             </Link>
             <p className="text-sm text-muted-foreground">

@@ -28,7 +28,7 @@ export function AppHeader() {
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/shop" className="flex items-center gap-2" aria-label="ushªOªpp Home">
-          <StaticShopLogo className="h-8 w-8" />
+          <StaticShopLogo width={32} height={32} alt="ushªOªpp Logo" />
           <span className="font-semibold text-lg hidden sm:inline-block text-foreground">ushªOªpp</span>
         </Link>
         
@@ -76,7 +76,7 @@ export function AppHeader() {
             <SheetContent side="right" className="w-[300px] sm:w-[340px] bg-card p-6">
               <div className="mb-8">
                 <Link href="/shop" className="flex items-center gap-2" onClick={() => setIsMobileMenuOpen(false)}>
-                  <StaticShopLogo className="h-8 w-8" />
+                  <StaticShopLogo width={32} height={32} alt="ushªOªpp Logo" />
                   <span className="font-semibold text-lg text-foreground">ushªOªpp</span>
                 </Link>
               </div>

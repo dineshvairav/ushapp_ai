@@ -76,7 +76,7 @@ export default function OnboardingPage() {
       >
         Skip
       </button>
-      <StaticShopLogo className="h-20 w-20 mb-8 animate-fadeIn" />
+      <StaticShopLogo width={80} height={80} className="mb-8 animate-fadeIn" alt="ushªOªpp Logo" />
       <div className="w-full max-w-xl md:max-w-2xl">
         <Carousel 
           setApi={setApi} 
