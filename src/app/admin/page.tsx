@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase';
+import { auth as firebaseAuthInstance } from '@/lib/firebase'; // Import the auth instance
 
 const ADMIN_EMAIL = 'dineshvairav@gmail.com';
 
@@ -20,7 +20,15 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (!firebaseAuthInstance) {
+      console.error("Firebase Auth is not initialized. Admin page cannot verify user. Redirecting.");
+      setIsLoading(false);
+      setIsAuthorized(false);
+      router.replace('/onboarding'); // Or a general error page
+      return; // Exit early
+    }
+
+    const unsubscribe = onAuthStateChanged(firebaseAuthInstance, (user) => { // Use the imported auth instance
       if (user) {
         setCurrentUser(user);
         const isAdmin = user.email === ADMIN_EMAIL;
@@ -37,7 +45,7 @@ export default function AdminPage() {
     });
 
     return () => unsubscribe();
-  }, [router]);
+  }, [router]); // firebaseAuthInstance is stable from module scope, router is the dependency
 
   if (isLoading) {
     return (
@@ -51,6 +59,7 @@ export default function AdminPage() {
   }
 
   if (!isAuthorized) {
+    // This content might flash briefly if redirection happens, or be shown if redirection fails.
     return (
       <MainAppLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -71,9 +80,6 @@ export default function AdminPage() {
         </div>
         <p className="text-lg text-muted-foreground">
           Manage your ushªOªpp application. Current admin: {currentUser?.email}
-        </p>
-        <p className="text-sm text-yellow-600 mt-1">
-          (Admin access is currently based on email matching: <code className="bg-yellow-100 text-yellow-800 p-1 rounded text-xs">{ADMIN_EMAIL}</code>. For production, use Firebase Custom Claims.)
         </p>
       </div>
 
