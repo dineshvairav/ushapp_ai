@@ -16,11 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AtSign, KeyRound, User as UserIconLucide, LogIn, UserPlus, Loader2 } from 'lucide-react'; // Renamed User to UserIconLucide to avoid conflict
-import { auth as firebaseAuthInstance } from '@/lib/firebase'; // Use the imported auth instance
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  GoogleAuthProvider, 
+import { auth } from '@/lib/firebase'; // Use the imported auth instance
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
   signInWithPopup,
   updateProfile,
   type User // Imported User type
@@ -61,21 +61,13 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
-  const showAuthUnavailableToast = () => {
-    toast({
-      variant: "destructive",
-      title: "Authentication Error",
-      description: "Authentication service is currently unavailable. Please try again later or check your configuration.",
-    });
-  };
-
   const handleAuthSuccess = (loggedInUser: User | null, message: string = "Successfully authenticated!") => {
     toast({ title: "Success", description: message });
     onOpenChange(false);
     if (loggedInUser && loggedInUser.email === ADMIN_EMAIL) {
       router.push('/admin');
     } else {
-      router.push('/shop'); 
+      router.push('/shop');
     }
   };
 
@@ -109,18 +101,13 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
 
   const handleEmailSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!firebaseAuthInstance) {
-      setIsLoadingEmail(false);
-      showAuthUnavailableToast();
-      return;
-    }
     setIsLoadingEmail(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(firebaseAuthInstance, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (name.trim() !== '' && userCredential.user) {
         await updateProfile(userCredential.user, { displayName: name });
          // Re-fetch the user to ensure displayName is fresh if needed, or trust it's updated for the redirect logic
-        const updatedUser = firebaseAuthInstance.currentUser; // Or userCredential.user which should be up-to-date
+        const updatedUser = auth.currentUser; // Or userCredential.user which should be up-to-date
         handleAuthSuccess(updatedUser, "Account created successfully!");
       } else {
         handleAuthSuccess(userCredential.user, "Account created successfully!");
@@ -137,14 +124,9 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
 
   const handleEmailSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!firebaseAuthInstance) {
-      setIsLoadingEmail(false);
-      showAuthUnavailableToast();
-      return;
-    }
     setIsLoadingEmail(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(firebaseAuthInstance, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       handleAuthSuccess(userCredential.user, "Signed in successfully!");
     } catch (error) {
       handleAuthError(error, "Could not sign in.");
@@ -156,15 +138,10 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
   };
 
   const handleGoogleSignIn = async () => {
-    if (!firebaseAuthInstance) {
-      setIsLoadingGoogle(false);
-      showAuthUnavailableToast();
-      return;
-    }
     setIsLoadingGoogle(true);
     const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(firebaseAuthInstance, provider);
+      const result = await signInWithPopup(auth, provider);
       handleAuthSuccess(result.user, "Signed in with Google successfully!");
     } catch (error) {
       handleAuthError(error, "Could not sign in with Google.");
@@ -201,7 +178,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
             {activeTab === "signin" ? "Sign in to continue your shopping journey." : "Join ushªOªpp to discover amazing products."}
           </DialogDescription>
         </DialogHeader>
-        
+
         <Tabs defaultValue="signin" className="w-full" onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2 mb-6 bg-secondary/50">
             <TabsTrigger value="signin" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
@@ -214,14 +191,14 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
 
           <TabsContent value="signin">
             <form onSubmit={handleEmailSignIn} className="space-y-6">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full border-input hover:bg-accent/10"
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoadingGoogle || isLoadingEmail}
               >
-                {isLoadingGoogle ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />} 
+                {isLoadingGoogle ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
                 Sign in with Google
               </Button>
               <div className="relative">
@@ -236,11 +213,11 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 <Label htmlFor="email-signin" className="text-muted-foreground">Email</Label>
                 <div className="relative">
                   <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="email-signin" 
-                    type="email" 
-                    placeholder="you@example.com" 
-                    required 
+                  <Input
+                    id="email-signin"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
                     className="pl-10"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -252,12 +229,12 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 <Label htmlFor="password-signin" className="text-muted-foreground">Password</Label>
                  <div className="relative">
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="password-signin" 
-                    type="password" 
-                    placeholder="••••••••" 
-                    required 
-                    className="pl-10" 
+                  <Input
+                    id="password-signin"
+                    type="password"
+                    placeholder="••••••••"
+                    required
+                    className="pl-10"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoadingEmail || isLoadingGoogle}
@@ -268,10 +245,10 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 {isLoadingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Sign In
               </Button>
-              <Button 
-                type="button" 
-                variant="link" 
-                onClick={handleGuestLogin} 
+              <Button
+                type="button"
+                variant="link"
+                onClick={handleGuestLogin}
                 className="w-full text-accent hover:text-accent/80"
                 disabled={isLoadingEmail || isLoadingGoogle}
               >
@@ -286,10 +263,10 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 <Label htmlFor="name-signup" className="text-muted-foreground">Full Name</Label>
                 <div className="relative">
                     <UserIconLucide className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="name-signup" 
-                      placeholder="Your Name" 
-                      required 
+                    <Input
+                      id="name-signup"
+                      placeholder="Your Name"
+                      required
                       className="pl-10"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
@@ -301,11 +278,11 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 <Label htmlFor="email-signup" className="text-muted-foreground">Email</Label>
                  <div className="relative">
                     <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="email-signup" 
-                      type="email" 
-                      placeholder="you@example.com" 
-                      required 
+                    <Input
+                      id="email-signup"
+                      type="email"
+                      placeholder="you@example.com"
+                      required
                       className="pl-10"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -317,11 +294,11 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
                 <Label htmlFor="password-signup" className="text-muted-foreground">Password</Label>
                 <div className="relative">
                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="password-signup" 
-                      type="password" 
-                      placeholder="Create a strong password" 
-                      required 
+                    <Input
+                      id="password-signup"
+                      type="password"
+                      placeholder="Create a strong password"
+                      required
                       className="pl-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -337,7 +314,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
             </form>
           </TabsContent>
         </Tabs>
-        
+
         <DialogFooter className="mt-6">
           <p className="text-xs text-muted-foreground text-center w-full">
             By continuing, you agree to ushªOªpp's Terms of Service and Privacy Policy.
@@ -347,4 +324,3 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
     </Dialog>
   );
 }
-    

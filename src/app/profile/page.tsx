@@ -11,7 +11,7 @@ import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, C
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth as firebaseAuthInstance } from '@/lib/firebase'; // Firebase auth instance
+import { auth } from '@/lib/firebase'; // Firebase auth instance
 import { useRouter } from 'next/navigation';
 
 // Mock data for admin uploaded files
@@ -47,22 +47,7 @@ export default function ProfilePage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!firebaseAuthInstance) {
-      console.warn("Firebase Auth is not initialized. Profile page will treat user as guest and redirect.");
-      setUserProfile({
-        name: 'Guest User',
-        email: 'Firebase not available',
-        avatarUrl: 'https://placehold.co/200x200.png',
-        joinDate: '',
-        phone: '',
-      });
-      setAvatarSrc('https://placehold.co/200x200.png');
-      setIsLoading(false);
-      router.replace('/onboarding');
-      return; // Exit early
-    }
-
-    const unsubscribe = onAuthStateChanged(firebaseAuthInstance, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
         setUserProfile(prevProfile => ({
@@ -160,7 +145,7 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Card className="lg:col-span-1 bg-card border-border">
             <CardHeader className="items-center text-center">
-              <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0} 
+              <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0}
                    aria-label="Change profile picture">
                 <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
                   <AvatarImage src={avatarSrc} alt={userProfile.name} data-ai-hint="profile avatar" />
@@ -195,7 +180,7 @@ export default function ProfilePage() {
                 </>
               )}
               <Button asChild variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
-                <Link href="/"> 
+                <Link href="/">
                   <LogOut className="mr-2 h-4 w-4" /> Log Out
                 </Link>
               </Button>
@@ -261,5 +246,3 @@ export default function ProfilePage() {
     </MainAppLayout>
   );
 }
-
-    

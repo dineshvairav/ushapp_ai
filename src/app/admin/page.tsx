@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth as firebaseAuthInstance } from '@/lib/firebase'; // Import the auth instance
+import { auth } from '@/lib/firebase'; // Import the auth instance
 
 const ADMIN_EMAIL = 'dineshvairav@gmail.com';
 
@@ -20,15 +20,7 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    if (!firebaseAuthInstance) {
-      console.error("Firebase Auth is not initialized. Admin page cannot verify user. Redirecting.");
-      setIsLoading(false);
-      setIsAuthorized(false);
-      router.replace('/onboarding'); // Or a general error page
-      return; // Exit early
-    }
-
-    const unsubscribe = onAuthStateChanged(firebaseAuthInstance, (user) => { // Use the imported auth instance
+    const unsubscribe = onAuthStateChanged(auth, (user) => { // Use the imported auth instance
       if (user) {
         setCurrentUser(user);
         const isAdmin = user.email === ADMIN_EMAIL;
@@ -45,7 +37,7 @@ export default function AdminPage() {
     });
 
     return () => unsubscribe();
-  }, [router]); // firebaseAuthInstance is stable from module scope, router is the dependency
+  }, [router]); // auth is stable from module scope, router is the dependency
 
   if (isLoading) {
     return (
