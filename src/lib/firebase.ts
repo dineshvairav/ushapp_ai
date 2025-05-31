@@ -9,15 +9,15 @@ import { getAuth, type Auth } from "firebase/auth";
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
-// IMPORTANT: REPLACE THIS WITH YOUR ACTUAL FIREBASE CONFIGURATION
+// Values are now loaded from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyCnmEM8R74x6Cum5-R9jzjwmlnGoRM1HG8",
-  authDomain: "ushapp-af453.firebaseapp.com",
-  databaseURL: "https://ushapp-af453-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "ushapp-af453",
-  storageBucket: "ushapp-af453.firebasestorage.app",
-  messagingSenderId: "86151688614",
-  appId: "1:86151688614:web:a9de9676de466f66889f67"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
 // Initialize Firebase
@@ -27,6 +27,16 @@ let auth: Auth;
 // let storage: FirebaseStorage; // Example for Storage
 
 if (getApps().length === 0) {
+  if (
+    !firebaseConfig.apiKey ||
+    !firebaseConfig.authDomain ||
+    !firebaseConfig.projectId
+  ) {
+    console.error(
+      'Firebase config is not properly set. Make sure all NEXT_PUBLIC_FIREBASE_* environment variables are defined.'
+    );
+    // You might want to throw an error here or handle this case more gracefully
+  }
   app = initializeApp(firebaseConfig);
 } else {
   app = getApps()[0]!;
