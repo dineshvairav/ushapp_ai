@@ -7,11 +7,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2 } from 'lucide-react'; // Added Loader2
+import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2 } from 'lucide-react';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
-import { onAuthStateChanged, type User } from "firebase/auth"; // Firebase imports
-import { auth } from '@/lib/firebase'; // Firebase auth instance
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { auth as firebaseAuthInstance } from '@/lib/firebase'; // Firebase auth instance
 import { useRouter } from 'next/navigation';
 
 // Mock data for admin uploaded files
@@ -27,7 +27,7 @@ export interface UserProfileData {
   avatarUrl: string;
   joinDate: string;
   phone: string;
-  firebaseUid?: string; // Optional: to store Firebase UID
+  firebaseUid?: string;
 }
 
 export default function ProfilePage() {
@@ -35,11 +35,11 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfileData>({
-    name: 'Guest User', // Default name
-    email: 'Not logged in', // Default email
+    name: 'Guest User',
+    email: 'Not logged in',
     avatarUrl: 'https://placehold.co/200x200.png',
-    joinDate: '', // Will be set if user is logged in
-    phone: '', // Will be set if user is logged in or from edit
+    joinDate: '',
+    phone: '',
   });
 
   const [avatarSrc, setAvatarSrc] = useState(userProfile.avatarUrl);
@@ -47,22 +47,35 @@ export default function ProfilePage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (!firebaseAuthInstance) {
+      console.warn("Firebase Auth is not initialized. Profile page will treat user as guest and redirect.");
+      setUserProfile({
+        name: 'Guest User',
+        email: 'Firebase not available',
+        avatarUrl: 'https://placehold.co/200x200.png',
+        joinDate: '',
+        phone: '',
+      });
+      setAvatarSrc('https://placehold.co/200x200.png');
+      setIsLoading(false);
+      router.replace('/onboarding');
+      return; // Exit early
+    }
+
+    const unsubscribe = onAuthStateChanged(firebaseAuthInstance, (user) => {
       if (user) {
         setCurrentUser(user);
         setUserProfile(prevProfile => ({
           ...prevProfile,
-          name: user.displayName || 'User', // Use displayName or a default
+          name: user.displayName || 'User',
           email: user.email || 'No email provided',
-          avatarUrl: user.photoURL || prevProfile.avatarUrl, // Use photoURL or keep current
+          avatarUrl: user.photoURL || prevProfile.avatarUrl,
           joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A',
           firebaseUid: user.uid,
-          // phone: user.phoneNumber || prevProfile.phone // If you store phone in Firebase Auth
         }));
         setAvatarSrc(user.photoURL || userProfile.avatarUrl);
       } else {
         setCurrentUser(null);
-        // Optionally redirect or reset to guest state
         setUserProfile({
             name: 'Guest User',
             email: 'Not logged in',
@@ -71,12 +84,12 @@ export default function ProfilePage() {
             phone: '',
         });
         setAvatarSrc('https://placehold.co/200x200.png');
-        router.replace('/onboarding'); // Redirect if not logged in
+        router.replace('/onboarding');
       }
       setIsLoading(false);
     });
     return () => unsubscribe();
-  }, [router, userProfile.avatarUrl]); // Added userProfile.avatarUrl to dependencies
+  }, [router, userProfile.avatarUrl]);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -99,15 +112,10 @@ export default function ProfilePage() {
     setUserProfile(updatedUser);
     // In a real app, you'd update Firebase Auth profile (displayName, photoURL)
     // and/or save other details to Firestore.
-    // For now, avatar is handled separately for preview via avatarSrc.
-    // if (updatedUser.avatarUrl !== userProfile.avatarUrl) {
-    //   setAvatarSrc(updatedUser.avatarUrl);
-    // }
   };
 
   useEffect(() => {
     const currentSrc = avatarSrc;
-    // Clean up blob URL if it's a local preview
     return () => {
       if (currentSrc.startsWith('blob:')) {
         URL.revokeObjectURL(currentSrc);
@@ -187,7 +195,7 @@ export default function ProfilePage() {
                 </>
               )}
               <Button asChild variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
-                <Link href="/"> {/* Redirect to welcome page on logout */}
+                <Link href="/"> 
                   <LogOut className="mr-2 h-4 w-4" /> Log Out
                 </Link>
               </Button>
@@ -254,3 +262,4 @@ export default function ProfilePage() {
   );
 }
 
+    
