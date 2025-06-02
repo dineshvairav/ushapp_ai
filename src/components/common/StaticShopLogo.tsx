@@ -16,7 +16,7 @@ export function StaticShopLogo({
 }: StaticShopLogoProps) {
   return (
     <Image
-      src="/logo.png" // Assumes your logo is at public/logo.png
+      src="/logo.png" // Assumes your logo is at /logo.png
       alt={alt}
       width={width}
       height={height}
