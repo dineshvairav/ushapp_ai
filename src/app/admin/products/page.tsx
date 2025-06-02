@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,6 +15,7 @@ import { categories } from '@/data/categories';
 // and state management (e.g., React Query or Zustand) would handle updates.
 
 export default function ProductManagementPage() {
+  const router = useRouter(); // Initialize router
   // For now, we'll use the static product data.
   // Later, this could be fetched from Firebase Firestore.
   const products = allProducts;
@@ -23,9 +25,7 @@ export default function ProductManagementPage() {
   };
 
   const handleEditProduct = (productId: string) => {
-    // Placeholder: In a real app, navigate to an edit product page/modal
-    console.log(`Edit product: ${productId}`);
-    // router.push(`/admin/products/edit/${productId}`);
+    router.push(`/admin/products/edit/${productId}`); // Navigate to edit page
   };
 
   const handleDeleteProduct = (productId: string) => {
