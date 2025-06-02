@@ -14,11 +14,12 @@ export async function generateStaticParams() {
 }
 
 interface EditProductServerPageProps {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
 }
 
 export default async function EditProductServerPage({ params }: EditProductServerPageProps) {
-  const { productId } = params;
+  const resolvedParams = await params;
+  const { productId } = resolvedParams;
   const product = allProducts.find(p => p.id === productId);
 
   if (!product) {
@@ -42,3 +43,4 @@ export default async function EditProductServerPage({ params }: EditProductServe
 
   return <EditProductClientPage productId={productId} initialProduct={product} />;
 }
+
