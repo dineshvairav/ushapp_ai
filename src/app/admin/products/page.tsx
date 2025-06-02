@@ -45,9 +45,11 @@ export default function ProductManagementPage() {
             Back to Admin Dashboard
           </Link>
         </Button>
-        <Button size="sm"> {/* Placeholder for "Add New Product" */}
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add New Product
+        <Button asChild size="sm">
+          <Link href="/admin/products/add">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add New Product
+          </Link>
         </Button>
       </div>
 
@@ -91,7 +93,7 @@ export default function ProductManagementPage() {
                   </TableCell>
                   <TableCell className="font-medium text-foreground">{product.name}</TableCell>
                   <TableCell className="text-muted-foreground">{getCategoryName(product.category)}</TableCell>
-                  <TableCell className="text-right text-foreground">${product.price.toFixed(2)}</TableCell>
+                  <TableCell className="text-right text-foreground">₹{product.price.toFixed(2)}</TableCell>
                   <TableCell className="text-center text-muted-foreground">
                     {product.stock !== undefined ? product.stock : 'N/A'}
                   </TableCell>

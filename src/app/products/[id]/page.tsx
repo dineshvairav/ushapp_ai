@@ -21,8 +21,8 @@ export async function generateStaticParams() {
 }
 
 interface ProductDetailsPageProps {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
 }
 
 export default async function ProductDetailsPage(props: ProductDetailsPageProps) {
@@ -95,7 +95,7 @@ export default async function ProductDetailsPage(props: ProductDetailsPageProps)
             <span className="ml-2 text-sm text-muted-foreground">(123 reviews)</span> {/* Static review count */}
           </div>
 
-          <p className="text-3xl font-extrabold text-primary mb-6">${product.price.toFixed(2)}</p>
+          <p className="text-3xl font-extrabold text-primary mb-6">₹{product.price.toFixed(2)}</p>
           
           <p className="text-base text-muted-foreground mb-6 leading-relaxed">{product.description}</p>
 

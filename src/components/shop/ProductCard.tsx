@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.description}
         </p>
         <p className="text-xl font-bold text-primary">
-          ${product.price.toFixed(2)}
+          ₹{product.price.toFixed(2)}
         </p>
       </CardContent>
       <CardFooter className="p-4 pt-0">
