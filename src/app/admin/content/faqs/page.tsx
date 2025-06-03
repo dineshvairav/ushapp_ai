@@ -115,9 +115,9 @@ export default function FaqManagementPage() {
   };
 
   const handleDeleteFaq = async (faqId: string, question: string) => {
-    if (window.confirm(\`Are you sure you want to delete the FAQ: "${question}"?\`)) {
+    if (window.confirm(`Are you sure you want to delete the FAQ: "${question}"?`)) {
       try {
-        await remove(ref(rtdb, \`content/faqs/\${faqId}\`));
+        await remove(ref(rtdb, `content/faqs/${faqId}`));
         toast({ title: "FAQ Deleted", description: "FAQ has been successfully deleted." });
       } catch (err) {
         console.error("Error deleting FAQ:", err);
@@ -128,8 +128,8 @@ export default function FaqManagementPage() {
 
   const handleToggleActive = async (faqId: string, currentStatus: boolean) => {
     try {
-      await update(ref(rtdb, \`content/faqs/\${faqId}\`), { isActive: !currentStatus });
-      toast({ title: "Status Updated", description: \`FAQ status changed to \${!currentStatus ? 'active' : 'inactive'}.\` });
+      await update(ref(rtdb, `content/faqs/${faqId}`), { isActive: !currentStatus });
+      toast({ title: "Status Updated", description: `FAQ status changed to ${!currentStatus ? 'active' : 'inactive'}.` });
     } catch (error) {
       console.error("Error updating FAQ status:", error);
       toast({ variant: "destructive", title: "Update Failed", description: "Could not update FAQ status." });
@@ -301,3 +301,5 @@ export default function FaqManagementPage() {
     </MainAppLayout>
   );
 }
+
+    
