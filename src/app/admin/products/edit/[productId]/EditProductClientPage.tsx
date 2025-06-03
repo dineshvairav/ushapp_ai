@@ -11,17 +11,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { type Product } from '@/data/products';
+import type { Product } from '@/data/products';
+import type { Category } from '@/data/categories'; // Import Category type
 import { ArrowLeft, Loader2, UploadCloud, Trash2 } from 'lucide-react';
-import { categories } from '@/data/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { rtdb } from '@/lib/firebase'; 
-import { ref, update } from 'firebase/database';
+import { ref, update, onValue } from 'firebase/database'; // Added onValue
 import { useToast } from '@/hooks/use-toast';
 
 interface EditProductClientPageProps {
   productId: string;
-  initialProduct: Product | undefined; // Can be undefined if fetch failed server-side
+  initialProduct: Product | undefined;
 }
 
 export default function EditProductClientPage({ productId, initialProduct }: EditProductClientPageProps) {
@@ -40,8 +40,32 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
   const [dp, setDp] = useState('');   
   const [category, setCategory] = useState('');
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  // Store original image URLs that came from the database to compare for changes
   const [originalImageSrcs, setOriginalImageSrcs] = useState<string[]>([]);
+
+  const [dbCategories, setDbCategories] = useState<Category[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
+  useEffect(() => {
+    const categoriesRef = ref(rtdb, 'categories');
+    const unsubscribe = onValue(categoriesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const categoryList: Category[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setDbCategories(categoryList);
+      } else {
+        setDbCategories([]);
+      }
+      setIsLoadingCategories(false);
+    }, (error) => {
+      console.error("Error fetching categories:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load categories." });
+      setIsLoadingCategories(false);
+    });
+    return () => unsubscribe();
+  }, [toast]);
 
 
   useEffect(() => {
@@ -56,12 +80,9 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       setCategory(initialProduct.category);
       const currentImages = initialProduct.images.map(img => img.src);
       setImagePreviews(currentImages);
-      setOriginalImageSrcs(currentImages); // Store original images
+      setOriginalImageSrcs(currentImages);
       setIsLoadingState(false);
     } else {
-      // This case implies product wasn't found or an error occurred during server fetch.
-      // The server component should ideally handle rendering a "not found" page.
-      // If we reach here with undefined initialProduct, it's a fallback.
       setProduct(null);
       setIsLoadingState(false);
       toast({
@@ -69,10 +90,8 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
         title: "Error",
         description: "Product data could not be loaded. It might not exist.",
       });
-      // Optionally redirect if product is definitely not found
-      // router.replace('/admin/products'); 
     }
-  }, [initialProduct, router, toast]);
+  }, [initialProduct, toast]);
 
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -102,30 +121,26 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!product && !productId) { // Check productId as well, as product state might be briefly null
+    if (!product && !productId) {
         toast({ variant: "destructive", title: "Error", description: "No product context to save." });
         return;
+    }
+     if (!category) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Please select a category." });
+      return;
     }
     setIsSaving(true);
 
     const productPath = `products/${productId}`;
     
-    // For images, only save URLs. Blob URLs are temporary.
-    // In a real app, new blobs would be uploaded to Firebase Storage first.
-    // For this demo, we'll save blob URLs if they exist, but they won't work long-term.
     const finalImages = imagePreviews.map(src => {
         const originalImage = initialProduct?.images.find(img => img.src === src);
-        if (originalImage) return originalImage; // Keep original hint if image is unchanged
+        if (originalImage) return originalImage;
         if (src.startsWith('blob:')) {
-            // This is a new preview. In a real app, this blob would be uploaded to Storage.
-            // For now, we save the blob URL but it's not a permanent solution.
-            // Add a generic hint for new images.
             return { src, hint: 'newly uploaded product image' };
         }
-        // This src might be from initialProduct or a URL typed/pasted in (if UI allowed)
         return { src, hint: 'product image' };
     });
-
 
     const updatedProductData: Partial<Product> = { 
       name,
@@ -136,7 +151,6 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       dp: dp ? parseFloat(dp) : undefined,
       category,
       images: finalImages,
-      // Retain existing details if not editable in this form
       details: product?.details || {}, 
     };
 
@@ -159,7 +173,6 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     }
   };
 
-  // Cleanup blob URLs
   useEffect(() => {
     const currentBlobPreviews = imagePreviews.filter(src => src.startsWith('blob:'));
     return () => {
@@ -178,7 +191,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     );
   }
 
-  if (!product && !initialProduct) { // If initialProduct was undefined and product state also became null
+  if (!product && !initialProduct) {
     return (
         <MainAppLayout>
              <div className="text-center py-10">
@@ -193,7 +206,6 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
         </MainAppLayout>
     );
   }
-
 
   return (
     <MainAppLayout>
@@ -293,14 +305,20 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
             </div>
             <div className="space-y-2">
               <Label htmlFor="product-category" className="text-foreground">Category</Label>
-              <Select value={category} onValueChange={setCategory} required disabled={isSaving}>
+              <Select value={category} onValueChange={setCategory} required disabled={isSaving || isLoadingCategories}>
                 <SelectTrigger id="product-category" className="w-full bg-input border-input focus:border-primary text-foreground">
-                  <SelectValue placeholder="Select a category" />
+                  <SelectValue placeholder={isLoadingCategories ? "Loading categories..." : "Select a category"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.filter(cat => cat.id !== 'all').map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
+                 {isLoadingCategories ? (
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  ) : dbCategories.length > 0 ? (
+                    dbCategories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-categories" disabled>No categories available. Add one in Admin Panel.</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

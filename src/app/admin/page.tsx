@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, Loader2 } from 'lucide-react';
+import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, ListTree, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase'; // Import the auth instance
+import { auth } from '@/lib/firebase';
 
 const ADMIN_EMAIL = 'dineshvairav@gmail.com';
 
@@ -20,7 +20,7 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => { // Use the imported auth instance
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
         const isAdmin = user.email === ADMIN_EMAIL;
@@ -37,7 +37,7 @@ export default function AdminPage() {
     });
 
     return () => unsubscribe();
-  }, [router]); // auth is stable from module scope, router is the dependency
+  }, [router]);
 
   if (isLoading) {
     return (
@@ -51,7 +51,6 @@ export default function AdminPage() {
   }
 
   if (!isAuthorized) {
-    // This content might flash briefly if redirection happens, or be shown if redirection fails.
     return (
       <MainAppLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -105,6 +104,22 @@ export default function AdminPage() {
             </CardDescription>
             <Button asChild variant="outline" size="sm">
               <Link href="/admin/products">Manage Products</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-primary/20 transition-shadow">
+          <CardHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <ListTree className="h-7 w-7 text-primary" />
+              <CardTitle className="text-xl">Category Management</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Add, edit, or remove product categories.
+            </CardDescription>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/categories">Manage Categories</Link>
             </Button>
           </CardContent>
         </Card>

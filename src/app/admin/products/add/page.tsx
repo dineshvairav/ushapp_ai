@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -12,10 +12,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { ArrowLeft, UploadCloud, Trash2, PackagePlus, Loader2 } from 'lucide-react';
-import { categories } from '@/data/categories';
+import type { Category } from '@/data/categories'; // Import Category type
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { rtdb } from '@/lib/firebase'; // Import Realtime Database
-import { ref, set, push } from 'firebase/database';
+import { rtdb } from '@/lib/firebase';
+import { ref, set, push, onValue } from 'firebase/database'; // Added onValue
 import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/data/products';
 
@@ -26,12 +26,37 @@ export default function AddProductPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [qty, setQty] = useState(''); // Changed from stock to qty
-  const [mop, setMop] = useState(''); // New state for MOP
-  const [dp, setDp] = useState('');   // New state for DP
+  const [qty, setQty] = useState('');
+  const [mop, setMop] = useState('');
+  const [dp, setDp] = useState('');
   const [category, setCategory] = useState('');
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const [dbCategories, setDbCategories] = useState<Category[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
+  useEffect(() => {
+    const categoriesRef = ref(rtdb, 'categories');
+    const unsubscribe = onValue(categoriesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const categoryList: Category[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setDbCategories(categoryList);
+      } else {
+        setDbCategories([]);
+      }
+      setIsLoadingCategories(false);
+    }, (error) => {
+      console.error("Error fetching categories:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load categories." });
+      setIsLoadingCategories(false);
+    });
+    return () => unsubscribe();
+  }, [toast]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -54,8 +79,12 @@ export default function AddProductPage() {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!category) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Please select a category." });
+      return;
+    }
     setIsLoading(true);
 
     const newProductRef = push(ref(rtdb, 'products'));
@@ -81,7 +110,7 @@ export default function AddProductPage() {
       dp: dp ? parseFloat(dp) : undefined,
       category,
       images: imagePreviews.map(src => ({ src, hint: 'new product' })),
-      details: {}, // Add UI for details if needed
+      details: {},
     };
 
     try {
@@ -90,8 +119,6 @@ export default function AddProductPage() {
         title: "Product Added",
         description: `${name} has been successfully added to the database.`,
       });
-      // Optionally, clear form or redirect
-      // setName(''); setDescription(''); /* ...etc... */ setImagePreviews([]);
       router.push('/admin/products');
     } catch (error) {
       console.error("Error adding product to RTDB:", error);
@@ -206,14 +233,20 @@ export default function AddProductPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="product-category" className="text-foreground">Category</Label>
-              <Select value={category} onValueChange={setCategory} required disabled={isLoading}>
+              <Select value={category} onValueChange={setCategory} required disabled={isLoading || isLoadingCategories}>
                 <SelectTrigger id="product-category" className="w-full bg-input border-input focus:border-primary text-foreground">
-                  <SelectValue placeholder="Select a category" />
+                  <SelectValue placeholder={isLoadingCategories ? "Loading categories..." : "Select a category"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.filter(cat => cat.id !== 'all').map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
+                  {isLoadingCategories ? (
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  ) : dbCategories.length > 0 ? (
+                    dbCategories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-categories" disabled>No categories available. Add one in Admin Panel.</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

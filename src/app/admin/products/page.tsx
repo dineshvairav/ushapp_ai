@@ -8,9 +8,9 @@ import { useRouter } from 'next/navigation';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Product } from '@/data/products'; // Using type from local data, ensure it matches RTDB structure
+import type { Product } from '@/data/products';
+import type { Category } from '@/data/categories'; // Import Category type
 import { ArrowLeft, Package, PlusCircle, Edit2, Trash2, Loader2, AlertTriangle } from 'lucide-react';
-import { categories } from '@/data/categories';
 import { rtdb } from '@/lib/firebase';
 import { ref, onValue, remove } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
@@ -19,12 +19,31 @@ export default function ProductManagementPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
+  const [dbCategories, setDbCategories] = useState<Record<string, Category>>({}); // Store categories as an object for easier lookup
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Fetch categories first or concurrently
+    const categoriesRef = ref(rtdb, 'categories');
+    const unsubscribeCategories = onValue(categoriesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const categoryMap: Record<string, Category> = {};
+        Object.keys(data).forEach(key => {
+          categoryMap[key] = { id: key, ...data[key] };
+        });
+        setDbCategories(categoryMap);
+      } else {
+        setDbCategories({});
+      }
+    }, (err) => {
+      console.error("Firebase RTDB read error (categories for product list):", err);
+      // Don't set main error yet, products might still load
+    });
+    
     const productsRef = ref(rtdb, 'products');
-    const unsubscribe = onValue(productsRef, (snapshot) => {
+    const unsubscribeProducts = onValue(productsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const productList: Product[] = Object.keys(data).map(key => ({
@@ -38,7 +57,7 @@ export default function ProductManagementPage() {
       }
       setIsLoading(false);
     }, (err) => {
-      console.error("Firebase RTDB read error:", err);
+      console.error("Firebase RTDB read error (products):", err);
       setError("Failed to load products from the database. Please try again later.");
       setIsLoading(false);
       toast({
@@ -48,11 +67,14 @@ export default function ProductManagementPage() {
       });
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeProducts();
+      unsubscribeCategories();
+    };
   }, [toast]);
 
   const getCategoryName = (categoryId: string) => {
-    return categories.find(cat => cat.id === categoryId)?.name || 'Unknown';
+    return dbCategories[categoryId]?.name || categoryId || 'Unknown'; // Fallback to ID if name not found
   };
 
   const handleEditProduct = (productId: string) => {
@@ -67,7 +89,6 @@ export default function ProductManagementPage() {
           title: "Product Deleted",
           description: `"${productName}" has been successfully deleted.`,
         });
-        // The onValue listener will automatically update the product list
       } catch (err) {
         console.error("Error deleting product:", err);
         toast({
@@ -180,7 +201,7 @@ export default function ProductManagementPage() {
         </div>
       )}
        <p className="text-xs text-muted-foreground mt-8 text-center">
-          Note: Product data is now managed via Firebase Realtime Database. Ensure your database rules are configured for security.
+          Note: Product and category data is now managed via Firebase Realtime Database.
         </p>
     </MainAppLayout>
   );

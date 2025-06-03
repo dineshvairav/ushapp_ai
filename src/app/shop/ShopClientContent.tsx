@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Product } from '@/data/products';
-import { categories as allCategories, type Category } from '@/data/categories';
+import type { Category as CategoryType } from '@/data/categories'; // Renamed to avoid conflict
 import { ProductCard } from '@/components/shop/ProductCard';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -15,7 +15,7 @@ import { ref, onValue } from 'firebase/database';
 
 const PRODUCTS_PER_CAROUSEL_DISPLAY = 4;
 
-interface CategoryWithProducts extends Category {
+interface CategoryWithProducts extends CategoryType {
   products: Product[];
 }
 
@@ -24,12 +24,14 @@ export function ShopClientContent() {
   const selectedCategoryId = searchParams.get('category');
 
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [dbCategories, setDbCategories] = useState<CategoryType[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const productsRef = ref(rtdb, 'products');
-    const unsubscribe = onValue(productsRef, (snapshot) => {
+    const unsubscribeProducts = onValue(productsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const productList: Product[] = Object.keys(data).map(key => ({
@@ -37,23 +39,46 @@ export function ShopClientContent() {
           ...data[key]
         }));
         setAllProducts(productList);
-        setError(null);
+        if (error && error.includes("products")) setError(null); // Clear product-specific error if successful
       } else {
         setAllProducts([]);
       }
-      setIsLoading(false);
+      setIsLoadingProducts(false);
     }, (err) => {
-      console.error("Firebase RTDB read error on shop page:", err);
-      setError("Failed to load products from the database. Please try again later.");
-      setIsLoading(false);
+      console.error("Firebase RTDB read error (products):", err);
+      setError("Failed to load products. Please try again later.");
+      setIsLoadingProducts(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    const categoriesRef = ref(rtdb, 'categories');
+    const unsubscribeCategories = onValue(categoriesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const categoryList: CategoryType[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setDbCategories(categoryList);
+         if (error && error.includes("categories")) setError(null); // Clear category-specific error if successful
+      } else {
+        setDbCategories([]);
+      }
+      setIsLoadingCategories(false);
+    }, (err) => {
+      console.error("Firebase RTDB read error (categories):", err);
+      setError("Failed to load categories. Please try again later.");
+      setIsLoadingCategories(false);
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeCategories();
+    };
+  }, [error]); // Added error to dependency array to allow re-clearing
 
   const categoriesForCarousels: CategoryWithProducts[] = useMemo(() => {
-    if (isLoading || error) return [];
-    return allCategories
+    if (isLoadingProducts || isLoadingCategories || error) return [];
+    return dbCategories
       .filter(category => category.id !== 'all') 
       .map(category => {
         const productsInCategory = allProducts.filter(
@@ -65,13 +90,15 @@ export function ShopClientContent() {
         };
       })
       .filter(categoryGroup => categoryGroup.products.length > 0); 
-  }, [allProducts, isLoading, error]);
+  }, [allProducts, dbCategories, isLoadingProducts, isLoadingCategories, error]);
 
-  if (isLoading) {
+  if (isLoadingProducts || isLoadingCategories) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-300px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Loading products from database...</p>
+        <p className="text-lg text-muted-foreground">
+          {isLoadingProducts && isLoadingCategories ? "Loading products and categories..." : isLoadingProducts ? "Loading products..." : "Loading categories..."}
+        </p>
       </div>
     );
   }
@@ -81,7 +108,7 @@ export function ShopClientContent() {
       <div className="bg-destructive/10 border border-destructive text-destructive p-6 rounded-md flex flex-col items-center gap-3 text-center">
         <AlertTriangle className="h-10 w-10" />
         <div>
-          <h3 className="font-semibold text-xl mb-2">Error Loading Products</h3>
+          <h3 className="font-semibold text-xl mb-2">Error Loading Data</h3>
           <p>{error}</p>
         </div>
         <Button variant="outline" onClick={() => window.location.reload()} className="mt-4 border-destructive text-destructive hover:bg-destructive/20">
@@ -92,7 +119,7 @@ export function ShopClientContent() {
   }
 
   if (selectedCategoryId) {
-    const category = allCategories.find(cat => cat.id === selectedCategoryId && cat.id !== 'all');
+    const category = dbCategories.find(cat => cat.id === selectedCategoryId && cat.id !== 'all');
     const productsToShow = allProducts.filter(prod => prod.category === selectedCategoryId);
 
     if (!category) {
@@ -203,13 +230,13 @@ export function ShopClientContent() {
             )}
           </section>
         ))}
-        {categoriesForCarousels.length === 0 && allProducts.length > 0 && (
+        {categoriesForCarousels.length === 0 && (dbCategories.length > 0 || allProducts.length > 0) && !isLoadingCategories && !isLoadingProducts && (
             <p className="text-xl text-muted-foreground text-center py-10">
-                Products are available, but none match the defined categories for carousel display. Check product category assignments.
+                Products or categories are available, but none match for carousel display. Check product category assignments or add more products.
             </p>
         )}
-        {allProducts.length === 0 && !isLoading && (
-           <p className="text-xl text-muted-foreground text-center py-10">No products available in the store at the moment. Please check back later!</p>
+        {dbCategories.length === 0 && allProducts.length === 0 && !isLoadingCategories && !isLoadingProducts && (
+           <p className="text-xl text-muted-foreground text-center py-10">No products or categories available in the store at the moment. Please check back later or add some in the Admin Panel!</p>
         )}
       </div>
     </>
