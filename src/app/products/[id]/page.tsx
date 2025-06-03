@@ -3,14 +3,16 @@ import type { Product as ProductType } from '@/data/products';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Star, ChevronLeft, PackageOpen, Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ChevronLeft, PackageOpen, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { rtdb } from '@/lib/firebase';
 import { ref, get, child, query, limitToFirst, orderByChild, equalTo } from 'firebase/database';
-import { ProductCard } from '@/components/shop/ProductCard'; // For related products
+import { ProductCard } from '@/components/shop/ProductCard';
+import ProductDisplayPricing from './ProductDisplayPricing'; // Import the client component
+
+const PLACEHOLDER_IMAGE_URL_600 = 'https://placehold.co/600x600.png';
 
 async function getProductFromDB(id: string): Promise<ProductType | undefined> {
   try {
@@ -48,9 +50,7 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
     }
     return [];
   } catch (error) {
-    // Log the error but return an empty array to prevent page crash if index is missing
     console.error(`Error fetching related products for category ${currentProduct.category}:`, error.message);
-    // You might want to add a more user-friendly error message or logging here
     return []; 
   }
 }
@@ -138,8 +138,13 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
             <CarouselContent>
               {product.images && product.images.length > 0 ? (
                 product.images.map((img, index) => {
-                  const imageSrc = img.src || 'https://placehold.co/600x600.png';
-                  const imageHint = img.src ? (img.hint || 'product photo') : 'placeholder image';
+                  const imageSrc = img.src || PLACEHOLDER_IMAGE_URL_600;
+                  let imageHint = "product photo"; // Default hint
+                  if (imageSrc === PLACEHOLDER_IMAGE_URL_600) {
+                    imageHint = "placeholder image";
+                  } else if (img.hint) {
+                    imageHint = img.hint.split(' ').slice(0, 2).join(' ');
+                  }
                   return (
                     <CarouselItem key={index}>
                       <div className="aspect-square relative">
@@ -158,7 +163,7 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
               ) : (
                 <CarouselItem>
                   <div className="aspect-square relative bg-muted flex items-center justify-center">
-                     <Image src="https://placehold.co/600x600.png" alt="Placeholder image" fill className="object-cover opacity-50" data-ai-hint="placeholder image" />
+                     <Image src={PLACEHOLDER_IMAGE_URL_600} alt="Placeholder image" fill className="object-cover opacity-50" data-ai-hint="placeholder image" />
                      <p className="text-muted-foreground z-10">No image available</p>
                   </div>
                 </CarouselItem>
@@ -173,64 +178,23 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
           </Carousel>
         </div>
 
-        <div className="py-4">
-          {product.category && ( // Assuming category is an ID, you might want to fetch category name
-            <Badge variant="outline" className="mb-2 border-accent text-accent">{(product.category).toUpperCase()}</Badge>
-          )}
-          <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-foreground mb-3">{product.name}</h1>
-          
-          <div className="flex items-center mb-4">
-            <div className="flex items-center text-yellow-400">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className={`h-5 w-5 ${i < 4 ? 'fill-current' : 'text-muted'}`} /> 
-              ))}
-            </div>
-            <span className="ml-2 text-sm text-muted-foreground">(123 reviews)</span> 
-          </div>
+        <ProductDisplayPricing product={product} />
 
-          <p className="text-3xl font-extrabold text-primary mb-6">₹{product.price.toFixed(2)}</p>
-          
-          {product.mop && product.mop > product.price && ( // Show MOP only if it's higher than price
-            <p className="text-sm text-muted-foreground mb-1">
-              M.R.P.: <span className="line-through">₹{product.mop.toFixed(2)}</span>
-            </p>
-          )}
-           {product.dp && (
-            <p className="text-sm text-muted-foreground mb-1">
-              Dealer Price: <span className="font-semibold text-accent">₹{product.dp.toFixed(2)}</span>
-            </p>
-          )}
-
-
-          <p className="text-base text-muted-foreground mb-6 leading-relaxed">{product.description}</p>
-
-          {product.qty !== undefined && product.qty > 0 ? (
-             <p className="text-sm text-green-500 mb-6">In Stock ({product.qty} available)</p>
-           ) : product.qty === 0 ? (
-             <p className="text-sm text-red-500 mb-6">Out of Stock</p>
-           ) : (
-             <p className="text-sm text-yellow-500 mb-6">Stock level not specified</p>
-           )}
-
-          <Button size="lg" className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground transition-colors duration-300" disabled={product.qty === 0}>
-            <ShoppingCart className="mr-2 h-5 w-5" /> {product.qty === 0 ? "Out of Stock" : "Add to Cart"}
-          </Button>
-
-          {product.details && Object.keys(product.details).length > 0 && (
-            <div className="mt-8 pt-6 border-t border-border">
-              <h3 className="text-xl font-semibold text-foreground mb-4">Product Details</h3>
-              <ul className="space-y-2 text-sm">
-                {Object.entries(product.details).map(([key, value]) => (
-                  <li key={key} className="flex justify-between">
-                    <span className="text-muted-foreground">{key}:</span>
-                    <span className="text-foreground font-medium text-right">{String(value)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
       </div>
+      
+      {product.details && Object.keys(product.details).length > 0 && (
+        <div className="mt-8 pt-6 border-t border-border">
+          <h3 className="text-xl font-semibold text-foreground mb-4">Product Details</h3>
+          <ul className="space-y-2 text-sm">
+            {Object.entries(product.details).map(([key, value]) => (
+              <li key={key} className="flex justify-between">
+                <span className="text-muted-foreground">{key}:</span>
+                <span className="text-foreground font-medium text-right">{String(value)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       
       {relatedProducts.length > 0 && (
         <>

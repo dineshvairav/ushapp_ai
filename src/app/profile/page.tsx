@@ -7,14 +7,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2 } from 'lucide-react';
+import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert } from 'lucide-react';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase'; // Firebase auth instance
+import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 
-// Mock data for admin uploaded files
+
 const adminFiles = [
   { id: 'file1', name: 'Product Catalog Q3 2024.pdf', type: 'pdf', size: '2.5MB', date: '2024-07-15' },
   { id: 'file2', name: 'Summer Collection Lookbook.jpg', type: 'image', size: '5.1MB', date: '2024-07-10' },
@@ -28,6 +29,7 @@ export interface UserProfileData {
   joinDate: string;
   phone: string;
   firebaseUid?: string;
+  isDealer?: boolean;
 }
 
 const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
@@ -42,6 +44,7 @@ export default function ProfilePage() {
     avatarUrl: DEFAULT_AVATAR_URL,
     joinDate: '',
     phone: '',
+    isDealer: false,
   });
 
   const [avatarSrc, setAvatarSrc] = useState(userProfile.avatarUrl);
@@ -49,10 +52,18 @@ export default function ProfilePage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => { 
       if (user) {
         setCurrentUser(user);
         const newAvatarUrl = user.photoURL || DEFAULT_AVATAR_URL;
+        let isDealerAccount = false;
+        try {
+          const idTokenResult = await user.getIdTokenResult(true); 
+          isDealerAccount = idTokenResult.claims.isDealer === true;
+        } catch (error) {
+          console.error("Error fetching custom claims for profile:", error);
+        }
+
         setUserProfile(prevProfile => ({
           ...prevProfile,
           name: user.displayName || 'User',
@@ -60,6 +71,7 @@ export default function ProfilePage() {
           avatarUrl: newAvatarUrl,
           joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A',
           firebaseUid: user.uid,
+          isDealer: isDealerAccount, 
         }));
         setAvatarSrc(newAvatarUrl);
       } else {
@@ -70,6 +82,7 @@ export default function ProfilePage() {
             avatarUrl: DEFAULT_AVATAR_URL,
             joinDate: '',
             phone: '',
+            isDealer: false,
         });
         setAvatarSrc(DEFAULT_AVATAR_URL);
         router.replace('/onboarding');
@@ -86,30 +99,22 @@ export default function ProfilePage() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (avatarSrc.startsWith('blob:')) {
+      if (avatarSrc && avatarSrc.startsWith('blob:')) {
         URL.revokeObjectURL(avatarSrc);
       }
       const newSrc = URL.createObjectURL(file);
       setAvatarSrc(newSrc);
-      // In a real app, you'd upload 'file' to Firebase Storage
-      // and update user.photoURL via updateProfile(auth.currentUser, { photoURL: newUrl })
-      // For now, this also means the data-ai-hint will reflect "profile avatar"
-      // as newSrc is not the default placeholder.
     }
   };
 
   const handleProfileSave = (updatedUser: UserProfileData) => {
     setUserProfile(updatedUser);
-    // If updatedUser.avatarUrl was changed (e.g. by removing a custom avatar back to default), reflect it.
-    // However, EditProfileModal doesn't currently handle avatar URL changes, only name/email/phone.
-    // If it did, we'd update avatarSrc here too.
-    // setAvatarSrc(updatedUser.avatarUrl);
   };
 
   useEffect(() => {
     const currentSrc = avatarSrc;
     return () => {
-      if (currentSrc.startsWith('blob:')) {
+      if (currentSrc && currentSrc.startsWith('blob:')) {
         URL.revokeObjectURL(currentSrc);
       }
     };
@@ -121,7 +126,10 @@ export default function ProfilePage() {
     return <FileText className="h-6 w-6 text-muted-foreground" />;
   };
   
-  const avatarHint = avatarSrc === DEFAULT_AVATAR_URL || !avatarSrc ? 'avatar placeholder' : 'profile avatar';
+  let avatarHint = "profile avatar";
+  if (!avatarSrc || avatarSrc === DEFAULT_AVATAR_URL) {
+      avatarHint = "avatar placeholder";
+  }
 
 
   if (isLoading) {
@@ -147,33 +155,49 @@ export default function ProfilePage() {
               Manage your account details and view your activity.
             </p>
           </div>
-          <Button variant="outline" className="shrink-0" onClick={() => setIsEditModalOpen(true)}>
-            <Edit3 className="mr-2 h-4 w-4" /> Profile Settings
-          </Button>
+          {currentUser && (
+            <Button variant="outline" className="shrink-0" onClick={() => setIsEditModalOpen(true)}>
+              <Edit3 className="mr-2 h-4 w-4" /> Profile Settings
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Card className="lg:col-span-1 bg-card border-border">
             <CardHeader className="items-center text-center">
-              <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0}
-                   aria-label="Change profile picture">
-                <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
-                  <AvatarImage src={avatarSrc || DEFAULT_AVATAR_URL} alt={userProfile.name} data-ai-hint={avatarHint} />
-                  <AvatarFallback>{userProfile.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <Camera className="h-8 w-8 text-white" />
+              {currentUser && (
+                <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0}
+                    aria-label="Change profile picture">
+                  <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
+                    <AvatarImage src={avatarSrc} alt={userProfile.name} data-ai-hint={avatarHint} />
+                    <AvatarFallback>{userProfile.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <Camera className="h-8 w-8 text-white" />
+                  </div>
                 </div>
-              </div>
+              )}
+              {!currentUser && ( 
+                 <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
+                    <AvatarImage src={DEFAULT_AVATAR_URL} alt="Guest User" data-ai-hint="avatar placeholder" />
+                    <AvatarFallback>GU</AvatarFallback>
+                  </Avatar>
+              )}
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 accept="image/*"
                 className="hidden"
+                disabled={!currentUser}
               />
               <CardTitle className="text-2xl">{userProfile.name}</CardTitle>
               <CardDescription>{userProfile.email}</CardDescription>
+              {currentUser && userProfile.isDealer && (
+                <Badge variant="secondary" className="mt-2 bg-accent text-accent-foreground">
+                  <ShieldAlert className="mr-1.5 h-4 w-4" /> Dealer Account
+                </Badge>
+              )}
             </CardHeader>
             <CardContent className="space-y-3">
               {currentUser && (
@@ -187,13 +211,18 @@ export default function ProfilePage() {
                     <span>{userProfile.phone || 'No phone number'}</span>
                   </div>
                   <Separator />
+                  <Button asChild variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
+                    <Link href="/onboarding?logout=true"> 
+                      <LogOut className="mr-2 h-4 w-4" /> Log Out
+                    </Link>
+                  </Button>
                 </>
               )}
-              <Button asChild variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
-                <Link href="/">
-                  <LogOut className="mr-2 h-4 w-4" /> Log Out
-                </Link>
-              </Button>
+               {!currentUser && (
+                 <Button asChild className="w-full">
+                   <Link href="/onboarding">Log In / Sign Up</Link>
+                 </Button>
+               )}
             </CardContent>
           </Card>
 
@@ -247,12 +276,14 @@ export default function ProfilePage() {
             </CardContent>
         </Card>
       </div>
-      <EditProfileModal
-        isOpen={isEditModalOpen}
-        onOpenChange={setIsEditModalOpen}
-        currentUser={userProfile}
-        onSave={handleProfileSave}
-      />
+      {currentUser && (
+        <EditProfileModal
+          isOpen={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          currentUser={userProfile}
+          onSave={handleProfileSave}
+        />
+      )}
     </MainAppLayout>
   );
 }

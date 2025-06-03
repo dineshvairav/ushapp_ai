@@ -11,14 +11,23 @@ import { useState, useEffect } from 'react';
 import { rtdb, auth } from '@/lib/firebase';
 import { ref, onValue } from 'firebase/database';
 import type { User } from 'firebase/auth';
-import type { AppSettings } from '@/app/admin/settings/page'; // Import AppSettings type
+import type { AppSettings } from '@/app/admin/settings/page';
 
-const defaultCurrencySymbol = '₹'; // Fallback currency
+const defaultCurrencySymbol = '₹';
+const PLACEHOLDER_IMAGE_URL_400 = 'https://placehold.co/400x400.png';
 
 export function ProductCard({ product }: ProductCardProps) {
   const firstImage = product.images?.[0];
-  const imageSrc = firstImage?.src || 'https://placehold.co/400x400.png';
-  const imageHint = firstImage?.src ? (firstImage.hint || 'product photo') : 'placeholder image';
+  const imageSrc = firstImage?.src || PLACEHOLDER_IMAGE_URL_400;
+  
+  let imageHint = "product photo"; // Default hint
+  if (imageSrc === PLACEHOLDER_IMAGE_URL_400) {
+    imageHint = "placeholder image";
+  } else if (firstImage?.hint) {
+    // Use provided hint, ensuring it's concise (e.g., first two words)
+    imageHint = firstImage.hint.split(' ').slice(0, 2).join(' ');
+  }
+
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isDealer, setIsDealer] = useState(false);

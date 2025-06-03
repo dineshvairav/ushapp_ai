@@ -9,17 +9,19 @@ import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Product } from '@/data/products';
-import type { Category } from '@/data/categories'; // Import Category type
+import type { Category } from '@/data/categories';
 import { ArrowLeft, Package, PlusCircle, Edit2, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { rtdb } from '@/lib/firebase';
 import { ref, onValue, remove } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 
+const PLACEHOLDER_IMAGE_URL_64 = 'https://placehold.co/64x64.png';
+
 export default function ProductManagementPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
-  const [dbCategories, setDbCategories] = useState<Record<string, Category>>({}); // Store categories as an object for easier lookup
+  const [dbCategories, setDbCategories] = useState<Record<string, Category>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,19 +82,19 @@ export default function ProductManagementPage() {
   };
 
   const handleDeleteProduct = async (productId: string, productName: string) => {
-    if (window.confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
+    if (window.confirm(\`Are you sure you want to delete "\${productName}"? This action cannot be undone.\`)) {
       try {
-        await remove(ref(rtdb, `products/${productId}`));
+        await remove(ref(rtdb, \`products/\${productId}\`));
         toast({
           title: "Product Deleted",
-          description: `"${productName}" has been successfully deleted.`,
+          description: \`"\${productName}" has been successfully deleted.\`,
         });
       } catch (err) {
         console.error("Error deleting product:", err);
         toast({
           variant: "destructive",
           title: "Deletion Failed",
-          description: `Could not delete "${productName}". Please try again.`,
+          description: \`Could not delete "\${productName}". Please try again.\`,
         });
       }
     }
@@ -161,8 +163,15 @@ export default function ProductManagementPage() {
               <TableBody>
                 {products.map((product) => {
                   const firstImage = product.images?.[0];
-                  const imageSrc = firstImage?.src || 'https://placehold.co/64x64.png';
-                  const imageHint = firstImage?.src ? (firstImage.hint || 'product photo') : 'placeholder image';
+                  const imageSrc = firstImage?.src || PLACEHOLDER_IMAGE_URL_64;
+                  
+                  let imageHint = "product photo";
+                  if (imageSrc === PLACEHOLDER_IMAGE_URL_64) {
+                    imageHint = "placeholder image";
+                  } else if (firstImage?.hint) {
+                    imageHint = firstImage.hint.split(' ').slice(0, 2).join(' ');
+                  }
+
                   return (
                     <TableRow key={product.id} className="hover:bg-muted/10">
                       <TableCell>
