@@ -87,6 +87,7 @@ export function AuthModal({ isOpen, onOpenChange, onGuestLoginClick }: AuthModal
           break;
         case 'auth/user-not-found':
         case 'auth/wrong-password':
+        case 'auth/invalid-credential': // Added this case
           errorMessage = 'Invalid email or password.';
           break;
         case 'auth/popup-closed-by-user':
