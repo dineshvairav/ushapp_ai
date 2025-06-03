@@ -12,7 +12,7 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const navLinks = [
   { href: '/shop', label: 'Shop' },
@@ -23,6 +23,11 @@ const navLinks = [
 export function AppHeader() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -39,7 +44,7 @@ export function AppHeader() {
               href={link.href}
               className={cn(
                 "transition-colors hover:text-primary",
-                pathname === link.href ? "text-primary font-medium" : "text-muted-foreground"
+                isMounted && pathname === link.href ? "text-primary font-medium" : "text-muted-foreground"
               )}
             >
               {link.label}
@@ -88,7 +93,7 @@ export function AppHeader() {
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
                       "text-lg transition-colors hover:text-primary py-2",
-                      pathname === link.href ? "text-primary font-medium" : "text-muted-foreground"
+                      isMounted && pathname === link.href ? "text-primary font-medium" : "text-muted-foreground"
                     )}
                   >
                     {link.label}
@@ -100,7 +105,7 @@ export function AppHeader() {
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
                       "text-lg transition-colors hover:text-primary py-2 flex items-center",
-                      pathname === "/profile" ? "text-primary font-medium" : "text-muted-foreground"
+                      isMounted && pathname === "/profile" ? "text-primary font-medium" : "text-muted-foreground"
                     )}
                   >
                     <UserCircle className="mr-2 h-5 w-5" />
