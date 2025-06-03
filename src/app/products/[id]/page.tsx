@@ -13,6 +13,8 @@ import { ProductCard } from '@/components/shop/ProductCard';
 import ProductDisplayPricing from './ProductDisplayPricing'; // Import the client component
 
 const PLACEHOLDER_IMAGE_URL_600 = 'https://placehold.co/600x600.png';
+const PLACEHOLDER_IMAGE_URL_400 = 'https://placehold.co/400x400.png';
+
 
 async function getProductFromDB(id: string): Promise<ProductType | undefined> {
   try {
@@ -50,7 +52,11 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
     }
     return [];
   } catch (error) {
-    console.error(`Error fetching related products for category ${currentProduct.category}:`, error.message);
+    if (error instanceof Error) {
+      console.error(`Error fetching related products for category ${currentProduct.category}:`, error.message);
+    } else {
+      console.error(`An unknown error occurred while fetching related products for category ${currentProduct.category}:`, error);
+    }
     return []; 
   }
 }
@@ -139,8 +145,8 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
               {product.images && product.images.length > 0 ? (
                 product.images.map((img, index) => {
                   const imageSrc = img.src || PLACEHOLDER_IMAGE_URL_600;
-                  let imageHint = "product photo"; // Default hint
-                  if (imageSrc === PLACEHOLDER_IMAGE_URL_600) {
+                  let imageHint = "product photo"; 
+                  if (!img.src || img.src === PLACEHOLDER_IMAGE_URL_600 || img.src === PLACEHOLDER_IMAGE_URL_400) {
                     imageHint = "placeholder image";
                   } else if (img.hint) {
                     imageHint = img.hint.split(' ').slice(0, 2).join(' ');
