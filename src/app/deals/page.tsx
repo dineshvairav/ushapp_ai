@@ -1,25 +1,47 @@
 
 "use client";
 
-import type { Metadata } from 'next';
+import { useEffect, useState } from 'react';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
-import { products as allProducts, type Product } from '@/data/products';
+import type { Product } from '@/data/products';
 import { ProductCard } from '@/components/shop/ProductCard';
 import { Badge } from '@/components/ui/badge';
-import { Percent } from 'lucide-react';
-
-// export const metadata: Metadata = { // Metadata should be defined in Server Components or layout files
-//   title: 'Special Deals - ushªOªpp',
-//   description: 'Check out the latest special deals and offers at ushªOªpp.',
-// };
-
-// For demonstration, let's pick the first 3 products as "deals"
-const dealProducts: Product[] = allProducts.slice(0, 3).map(p => ({
-    ...p,
-}));
-
+import { Percent, Loader2, AlertTriangle } from 'lucide-react';
+import { rtdb } from '@/lib/firebase';
+import { ref, onValue } from 'firebase/database';
 
 export default function DealsPage() {
+  const [dealProducts, setDealProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const productsRef = ref(rtdb, 'products');
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productList: Product[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        // For demonstration, let's pick the first 3 products as "deals"
+        // Or products with MOP for a more "deal-like" feel
+        const potentialDeals = productList.filter(p => p.mop && p.mop > p.price);
+        setDealProducts(potentialDeals.length > 0 ? potentialDeals.slice(0, 4) : productList.slice(0, 4));
+        setError(null);
+      } else {
+        setDealProducts([]);
+      }
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Firebase RTDB read error on deals page:", err);
+      setError("Failed to load deals from the database. Please try again later.");
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <MainAppLayout>
       <div className="mb-8">
@@ -30,11 +52,28 @@ export default function DealsPage() {
           </h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Grab these amazing offers while they last!
+          Grab these amazing offers while they last! Live from our database.
         </p>
       </div>
 
-      {dealProducts.length > 0 ? (
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center min-h-[30vh]">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg text-muted-foreground">Loading deals...</p>
+        </div>
+      )}
+
+      {error && !isLoading && (
+        <div className="bg-destructive/10 border border-destructive text-destructive p-4 rounded-md flex items-center gap-3">
+          <AlertTriangle className="h-6 w-6" />
+          <div>
+            <h3 className="font-semibold">Error Loading Deals</h3>
+            <p>{error}</p>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && !error && dealProducts.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {dealProducts.map((product) => (
             <div key={product.id} className="relative group">
@@ -48,11 +87,14 @@ export default function DealsPage() {
             </div>
           ))}
         </div>
-      ) : (
+      )}
+      
+      {!isLoading && !error && dealProducts.length === 0 && (
         <p className="text-xl text-muted-foreground text-center py-10">
           No special deals available right now. Check back soon!
         </p>
       )}
+
       <style jsx global>{`
         @keyframes customPulse {
           0%, 100% { opacity: 1; transform: scale(1); }

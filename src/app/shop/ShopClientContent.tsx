@@ -1,15 +1,17 @@
 
 "use client"; 
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { products as allProducts, type Product } from '@/data/products';
+import type { Product } from '@/data/products';
 import { categories as allCategories, type Category } from '@/data/categories';
 import { ProductCard } from '@/components/shop/ProductCard';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import Link from 'next/link';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
+import { rtdb } from '@/lib/firebase';
+import { ref, onValue } from 'firebase/database';
 
 const PRODUCTS_PER_CAROUSEL_DISPLAY = 4;
 
@@ -21,7 +23,36 @@ export function ShopClientContent() {
   const searchParams = useSearchParams();
   const selectedCategoryId = searchParams.get('category');
 
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const productsRef = ref(rtdb, 'products');
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productList: Product[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setAllProducts(productList);
+        setError(null);
+      } else {
+        setAllProducts([]);
+      }
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Firebase RTDB read error on shop page:", err);
+      setError("Failed to load products from the database. Please try again later.");
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const categoriesForCarousels: CategoryWithProducts[] = useMemo(() => {
+    if (isLoading || error) return [];
     return allCategories
       .filter(category => category.id !== 'all') 
       .map(category => {
@@ -34,7 +65,31 @@ export function ShopClientContent() {
         };
       })
       .filter(categoryGroup => categoryGroup.products.length > 0); 
-  }, []);
+  }, [allProducts, isLoading, error]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-300px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">Loading products from database...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-destructive/10 border border-destructive text-destructive p-6 rounded-md flex flex-col items-center gap-3 text-center">
+        <AlertTriangle className="h-10 w-10" />
+        <div>
+          <h3 className="font-semibold text-xl mb-2">Error Loading Products</h3>
+          <p>{error}</p>
+        </div>
+        <Button variant="outline" onClick={() => window.location.reload()} className="mt-4 border-destructive text-destructive hover:bg-destructive/20">
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   if (selectedCategoryId) {
     const category = allCategories.find(cat => cat.id === selectedCategoryId && cat.id !== 'all');
@@ -148,8 +203,13 @@ export function ShopClientContent() {
             )}
           </section>
         ))}
-        {categoriesForCarousels.length === 0 && (
-           <p className="text-xl text-muted-foreground text-center py-10">No products available at the moment. Please check back later!</p>
+        {categoriesForCarousels.length === 0 && allProducts.length > 0 && (
+            <p className="text-xl text-muted-foreground text-center py-10">
+                Products are available, but none match the defined categories for carousel display. Check product category assignments.
+            </p>
+        )}
+        {allProducts.length === 0 && !isLoading && (
+           <p className="text-xl text-muted-foreground text-center py-10">No products available in the store at the moment. Please check back later!</p>
         )}
       </div>
     </>
