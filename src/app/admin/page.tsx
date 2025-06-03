@@ -164,7 +164,9 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Manage promotional banners, FAQs, and site content.
             </CardDescription>
-            <Button variant="outline" size="sm">Edit Content</Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/content">Edit Content</Link>
+            </Button>
           </CardContent>
         </Card>
          <Card className="hover:shadow-primary/20 transition-shadow">
