@@ -15,13 +15,13 @@ import { type Product } from '@/data/products';
 import { ArrowLeft, Loader2, UploadCloud, Trash2 } from 'lucide-react';
 import { categories } from '@/data/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { rtdb } from '@/lib/firebase'; // Import Realtime Database
+import { rtdb } from '@/lib/firebase'; 
 import { ref, update } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 
 interface EditProductClientPageProps {
   productId: string;
-  initialProduct: Product | undefined;
+  initialProduct: Product | undefined; // Can be undefined if fetch failed server-side
 }
 
 export default function EditProductClientPage({ productId, initialProduct }: EditProductClientPageProps) {
@@ -29,17 +29,20 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
   const { toast } = useToast();
 
   const [product, setProduct] = useState<Product | null>(null);
-  const [isLoadingState, setIsLoadingState] = useState(true); // For initial loading
-  const [isSaving, setIsSaving] = useState(false); // For form submission
+  const [isLoadingState, setIsLoadingState] = useState(true); 
+  const [isSaving, setIsSaving] = useState(false);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [qty, setQty] = useState(''); // Changed from stock to qty
-  const [mop, setMop] = useState(''); // New state for MOP
-  const [dp, setDp] = useState('');   // New state for DP
+  const [qty, setQty] = useState(''); 
+  const [mop, setMop] = useState(''); 
+  const [dp, setDp] = useState('');   
   const [category, setCategory] = useState('');
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  // Store original image URLs that came from the database to compare for changes
+  const [originalImageSrcs, setOriginalImageSrcs] = useState<string[]>([]);
+
 
   useEffect(() => {
     if (initialProduct) {
@@ -51,13 +54,25 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       setMop(initialProduct.mop?.toString() || '');
       setDp(initialProduct.dp?.toString() || '');
       setCategory(initialProduct.category);
-      setImagePreviews(initialProduct.images.map(img => img.src));
+      const currentImages = initialProduct.images.map(img => img.src);
+      setImagePreviews(currentImages);
+      setOriginalImageSrcs(currentImages); // Store original images
       setIsLoadingState(false);
     } else {
+      // This case implies product wasn't found or an error occurred during server fetch.
+      // The server component should ideally handle rendering a "not found" page.
+      // If we reach here with undefined initialProduct, it's a fallback.
       setProduct(null);
       setIsLoadingState(false);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Product data could not be loaded. It might not exist.",
+      });
+      // Optionally redirect if product is definitely not found
+      // router.replace('/admin/products'); 
     }
-  }, [initialProduct]);
+  }, [initialProduct, router, toast]);
 
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -87,11 +102,32 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!product) return;
+    if (!product && !productId) { // Check productId as well, as product state might be briefly null
+        toast({ variant: "destructive", title: "Error", description: "No product context to save." });
+        return;
+    }
     setIsSaving(true);
 
     const productPath = `products/${productId}`;
-    const updatedProductData: Partial<Product> = { // Use Partial for updates
+    
+    // For images, only save URLs. Blob URLs are temporary.
+    // In a real app, new blobs would be uploaded to Firebase Storage first.
+    // For this demo, we'll save blob URLs if they exist, but they won't work long-term.
+    const finalImages = imagePreviews.map(src => {
+        const originalImage = initialProduct?.images.find(img => img.src === src);
+        if (originalImage) return originalImage; // Keep original hint if image is unchanged
+        if (src.startsWith('blob:')) {
+            // This is a new preview. In a real app, this blob would be uploaded to Storage.
+            // For now, we save the blob URL but it's not a permanent solution.
+            // Add a generic hint for new images.
+            return { src, hint: 'newly uploaded product image' };
+        }
+        // This src might be from initialProduct or a URL typed/pasted in (if UI allowed)
+        return { src, hint: 'product image' };
+    });
+
+
+    const updatedProductData: Partial<Product> = { 
       name,
       description,
       price: parseFloat(price) || 0,
@@ -99,8 +135,9 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       mop: mop ? parseFloat(mop) : undefined,
       dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: imagePreviews.map(src => ({ src, hint: 'updated product' })),
-      // details: product.details, // Keep existing details or provide UI to edit
+      images: finalImages,
+      // Retain existing details if not editable in this form
+      details: product?.details || {}, 
     };
 
     try {
@@ -122,6 +159,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     }
   };
 
+  // Cleanup blob URLs
   useEffect(() => {
     const currentBlobPreviews = imagePreviews.filter(src => src.startsWith('blob:'));
     return () => {
@@ -140,7 +178,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     );
   }
 
-  if (!product) {
+  if (!product && !initialProduct) { // If initialProduct was undefined and product state also became null
     return (
         <MainAppLayout>
              <div className="text-center py-10">
@@ -268,7 +306,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground">Product Images</Label>
+              <Label className="text-foreground">Product Images (Max 5)</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {imagePreviews.map((src, index) => (
                   <div key={src + index} className="relative group aspect-square border border-border rounded-md overflow-hidden">
@@ -292,7 +330,6 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
                   >
                     <UploadCloud className="h-8 w-8 text-muted-foreground mb-1" />
                     <span className="text-xs text-muted-foreground">Add Image(s)</span>
-                    <span className="text-xs text-muted-foreground">(Max 5)</span>
                   </Label>
                 )}
               </div>
@@ -303,10 +340,10 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
                 accept="image/*"
                 onChange={handleImageUpload}
                 className="hidden"
-                disabled={isSaving}
+                disabled={isSaving || imagePreviews.length >= 5}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Max 5 images. Image URLs will be saved to RTDB. For permanent file storage, Firebase Storage integration is needed.
+                For new images, previews are shown. For permanent storage, Firebase Storage integration is recommended. Existing database URLs are preserved unless image is removed.
               </p>
             </div>
 

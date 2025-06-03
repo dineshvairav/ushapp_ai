@@ -1,38 +1,81 @@
 
 "use client";
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { products as allProducts, type Product } from '@/data/products'; // Using local data for now
-import { ArrowLeft, Package, PlusCircle, Edit2, Trash2 } from 'lucide-react';
+import type { Product } from '@/data/products'; // Using type from local data, ensure it matches RTDB structure
+import { ArrowLeft, Package, PlusCircle, Edit2, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { categories } from '@/data/categories';
-
-// In a real app, products would be fetched from a database (e.g., Firestore)
-// and state management (e.g., React Query or Zustand) would handle updates.
+import { rtdb } from '@/lib/firebase';
+import { ref, onValue, remove } from 'firebase/database';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ProductManagementPage() {
-  const router = useRouter(); // Initialize router
-  // For now, we'll use the static product data.
-  // Later, this could be fetched from Firebase Firestore.
-  const products = allProducts;
+  const router = useRouter();
+  const { toast } = useToast();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const productsRef = ref(rtdb, 'products');
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productList: Product[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setProducts(productList);
+        setError(null);
+      } else {
+        setProducts([]);
+      }
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Firebase RTDB read error:", err);
+      setError("Failed to load products from the database. Please try again later.");
+      setIsLoading(false);
+      toast({
+        variant: "destructive",
+        title: "Database Error",
+        description: "Could not fetch products.",
+      });
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
 
   const getCategoryName = (categoryId: string) => {
     return categories.find(cat => cat.id === categoryId)?.name || 'Unknown';
   };
 
   const handleEditProduct = (productId: string) => {
-    router.push(`/admin/products/edit/${productId}`); // Navigate to edit page
+    router.push(`/admin/products/edit/${productId}`);
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    // Placeholder: In a real app, show confirmation and delete from database
-    if (confirm('Are you sure you want to delete this product?')) {
-      console.log(`Delete product: ${productId}`);
-      // Example: Call a function to delete from Firestore and update local state/refetch
+  const handleDeleteProduct = async (productId: string, productName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
+      try {
+        await remove(ref(rtdb, `products/${productId}`));
+        toast({
+          title: "Product Deleted",
+          description: `"${productName}" has been successfully deleted.`,
+        });
+        // The onValue listener will automatically update the product list
+      } catch (err) {
+        console.error("Error deleting product:", err);
+        toast({
+          variant: "destructive",
+          title: "Deletion Failed",
+          description: `Could not delete "${productName}". Please try again.`,
+        });
+      }
     }
   };
 
@@ -60,66 +103,84 @@ export default function ProductManagementPage() {
             Product Catalog Management
           </h1>
           <p className="text-lg text-muted-foreground">
-            View, add, edit, or remove products from your shop.
+            View, add, edit, or remove products from your shop. Data is live from Firebase.
           </p>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl shadow-lg">
-        {products.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[80px]">Image</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-center">Stock</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id} className="hover:bg-muted/10">
-                  <TableCell>
-                    <Image
-                      src={product.images[0]?.src || 'https://placehold.co/64x64.png'}
-                      alt={product.name}
-                      width={64}
-                      height={64}
-                      className="rounded-md object-cover aspect-square"
-                      data-ai-hint={product.images[0]?.hint || 'product image'}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium text-foreground">{product.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{getCategoryName(product.category)}</TableCell>
-                  <TableCell className="text-right text-foreground">₹{product.price.toFixed(2)}</TableCell>
-                  <TableCell className="text-center text-muted-foreground">
-                    {product.stock !== undefined ? product.stock : 'N/A'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex justify-center gap-2">
-                      <Button variant="outline" size="icon" onClick={() => handleEditProduct(product.id)} title="Edit Product">
-                        <Edit2 className="h-4 w-4 text-blue-500" />
-                      </Button>
-                      <Button variant="outline" size="icon" onClick={() => handleDeleteProduct(product.id)} title="Delete Product">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="p-8 text-center">
-            <p className="text-muted-foreground">No products found. Start by adding a new product.</p>
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center min-h-[30vh]">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg text-muted-foreground">Loading products from database...</p>
+        </div>
+      )}
+
+      {error && !isLoading && (
+        <div className="bg-destructive/10 border border-destructive text-destructive p-4 rounded-md flex items-center gap-3">
+          <AlertTriangle className="h-6 w-6" />
+          <div>
+            <h3 className="font-semibold">Error Loading Products</h3>
+            <p>{error}</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="bg-card border border-border rounded-xl shadow-lg">
+          {products.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[80px]">Image</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-center">Qty</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {products.map((product) => (
+                  <TableRow key={product.id} className="hover:bg-muted/10">
+                    <TableCell>
+                      <Image
+                        src={product.images[0]?.src || 'https://placehold.co/64x64.png'}
+                        alt={product.name}
+                        width={64}
+                        height={64}
+                        className="rounded-md object-cover aspect-square"
+                        data-ai-hint={product.images[0]?.hint || 'product image'}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium text-foreground">{product.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{getCategoryName(product.category)}</TableCell>
+                    <TableCell className="text-right text-foreground">₹{product.price.toFixed(2)}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">
+                      {product.qty !== undefined ? product.qty : 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center gap-2">
+                        <Button variant="outline" size="icon" onClick={() => handleEditProduct(product.id)} title="Edit Product">
+                          <Edit2 className="h-4 w-4 text-blue-500" />
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={() => handleDeleteProduct(product.id, product.name)} title="Delete Product">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="p-8 text-center">
+              <p className="text-muted-foreground">No products found in the database. Start by adding a new product.</p>
+            </div>
+          )}
+        </div>
+      )}
        <p className="text-xs text-muted-foreground mt-8 text-center">
-          Note: Product data is currently static. For full CRUD operations, integrate with Firebase Firestore
-          and secure backend functions for adding, editing, and deleting products.
+          Note: Product data is now managed via Firebase Realtime Database. Ensure your database rules are configured for security.
         </p>
     </MainAppLayout>
   );
