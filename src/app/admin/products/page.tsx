@@ -24,7 +24,6 @@ export default function ProductManagementPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch categories first or concurrently
     const categoriesRef = ref(rtdb, 'categories');
     const unsubscribeCategories = onValue(categoriesRef, (snapshot) => {
       const data = snapshot.val();
@@ -39,7 +38,6 @@ export default function ProductManagementPage() {
       }
     }, (err) => {
       console.error("Firebase RTDB read error (categories for product list):", err);
-      // Don't set main error yet, products might still load
     });
     
     const productsRef = ref(rtdb, 'products');
@@ -74,7 +72,7 @@ export default function ProductManagementPage() {
   }, [toast]);
 
   const getCategoryName = (categoryId: string) => {
-    return dbCategories[categoryId]?.name || categoryId || 'Unknown'; // Fallback to ID if name not found
+    return dbCategories[categoryId]?.name || categoryId || 'Unknown'; 
   };
 
   const handleEditProduct = (productId: string) => {
@@ -161,36 +159,41 @@ export default function ProductManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id} className="hover:bg-muted/10">
-                    <TableCell>
-                      <Image
-                        src={product.images[0]?.src || 'https://placehold.co/64x64.png'}
-                        alt={product.name}
-                        width={64}
-                        height={64}
-                        className="rounded-md object-cover aspect-square"
-                        data-ai-hint={product.images[0]?.hint || 'product image'}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">{product.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{getCategoryName(product.category)}</TableCell>
-                    <TableCell className="text-right text-foreground">₹{product.price.toFixed(2)}</TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      {product.qty !== undefined ? product.qty : 'N/A'}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center gap-2">
-                        <Button variant="outline" size="icon" onClick={() => handleEditProduct(product.id)} title="Edit Product">
-                          <Edit2 className="h-4 w-4 text-blue-500" />
-                        </Button>
-                        <Button variant="outline" size="icon" onClick={() => handleDeleteProduct(product.id, product.name)} title="Delete Product">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {products.map((product) => {
+                  const firstImage = product.images?.[0];
+                  const imageSrc = firstImage?.src || 'https://placehold.co/64x64.png';
+                  const imageHint = firstImage?.src ? (firstImage.hint || 'product photo') : 'placeholder image';
+                  return (
+                    <TableRow key={product.id} className="hover:bg-muted/10">
+                      <TableCell>
+                        <Image
+                          src={imageSrc}
+                          alt={product.name}
+                          width={64}
+                          height={64}
+                          className="rounded-md object-cover aspect-square"
+                          data-ai-hint={imageHint}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">{product.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{getCategoryName(product.category)}</TableCell>
+                      <TableCell className="text-right text-foreground">₹{product.price.toFixed(2)}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">
+                        {product.qty !== undefined ? product.qty : 'N/A'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-2">
+                          <Button variant="outline" size="icon" onClick={() => handleEditProduct(product.id)} title="Edit Product">
+                            <Edit2 className="h-4 w-4 text-blue-500" />
+                          </Button>
+                          <Button variant="outline" size="icon" onClick={() => handleDeleteProduct(product.id, product.name)} title="Delete Product">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (

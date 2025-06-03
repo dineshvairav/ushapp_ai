@@ -30,6 +30,8 @@ export interface UserProfileData {
   firebaseUid?: string;
 }
 
+const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
+
 export default function ProfilePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -37,7 +39,7 @@ export default function ProfilePage() {
   const [userProfile, setUserProfile] = useState<UserProfileData>({
     name: 'Guest User',
     email: 'Not logged in',
-    avatarUrl: 'https://placehold.co/200x200.png',
+    avatarUrl: DEFAULT_AVATAR_URL,
     joinDate: '',
     phone: '',
   });
@@ -50,31 +52,32 @@ export default function ProfilePage() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
+        const newAvatarUrl = user.photoURL || DEFAULT_AVATAR_URL;
         setUserProfile(prevProfile => ({
           ...prevProfile,
           name: user.displayName || 'User',
           email: user.email || 'No email provided',
-          avatarUrl: user.photoURL || prevProfile.avatarUrl,
+          avatarUrl: newAvatarUrl,
           joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A',
           firebaseUid: user.uid,
         }));
-        setAvatarSrc(user.photoURL || userProfile.avatarUrl);
+        setAvatarSrc(newAvatarUrl);
       } else {
         setCurrentUser(null);
         setUserProfile({
             name: 'Guest User',
             email: 'Not logged in',
-            avatarUrl: 'https://placehold.co/200x200.png',
+            avatarUrl: DEFAULT_AVATAR_URL,
             joinDate: '',
             phone: '',
         });
-        setAvatarSrc('https://placehold.co/200x200.png');
+        setAvatarSrc(DEFAULT_AVATAR_URL);
         router.replace('/onboarding');
       }
       setIsLoading(false);
     });
     return () => unsubscribe();
-  }, [router, userProfile.avatarUrl]);
+  }, [router]);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -90,13 +93,17 @@ export default function ProfilePage() {
       setAvatarSrc(newSrc);
       // In a real app, you'd upload 'file' to Firebase Storage
       // and update user.photoURL via updateProfile(auth.currentUser, { photoURL: newUrl })
+      // For now, this also means the data-ai-hint will reflect "profile avatar"
+      // as newSrc is not the default placeholder.
     }
   };
 
   const handleProfileSave = (updatedUser: UserProfileData) => {
     setUserProfile(updatedUser);
-    // In a real app, you'd update Firebase Auth profile (displayName, photoURL)
-    // and/or save other details to Firestore.
+    // If updatedUser.avatarUrl was changed (e.g. by removing a custom avatar back to default), reflect it.
+    // However, EditProfileModal doesn't currently handle avatar URL changes, only name/email/phone.
+    // If it did, we'd update avatarSrc here too.
+    // setAvatarSrc(updatedUser.avatarUrl);
   };
 
   useEffect(() => {
@@ -113,6 +120,9 @@ export default function ProfilePage() {
     if (fileType === 'image') return <ImageIcon className="h-6 w-6 text-accent" />;
     return <FileText className="h-6 w-6 text-muted-foreground" />;
   };
+  
+  const avatarHint = avatarSrc === DEFAULT_AVATAR_URL || !avatarSrc ? 'avatar placeholder' : 'profile avatar';
+
 
   if (isLoading) {
     return (
@@ -148,7 +158,7 @@ export default function ProfilePage() {
               <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0}
                    aria-label="Change profile picture">
                 <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
-                  <AvatarImage src={avatarSrc} alt={userProfile.name} data-ai-hint="profile avatar" />
+                  <AvatarImage src={avatarSrc || DEFAULT_AVATAR_URL} alt={userProfile.name} data-ai-hint={avatarHint} />
                   <AvatarFallback>{userProfile.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300">

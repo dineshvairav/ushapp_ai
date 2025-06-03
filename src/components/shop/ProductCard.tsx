@@ -11,17 +11,22 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const firstImage = product.images?.[0];
+  const imageSrc = firstImage?.src || 'https://placehold.co/400x400.png';
+  // If using the placeholder, hint is "placeholder image". Otherwise, use image's hint or "product photo".
+  const imageHint = firstImage?.src ? (firstImage.hint || 'product photo') : 'placeholder image';
+
   return (
     <Card className="overflow-hidden h-full flex flex-col bg-card border-border hover:shadow-xl hover:border-primary/50 transition-all duration-300 ease-out rounded-lg group">
       <CardHeader className="p-0 relative">
         <Link href={`/products/${product.id}`} className="block aspect-square overflow-hidden">
           <Image
-            src={product.images[0]?.src || 'https://placehold.co/400x400.png'}
+            src={imageSrc}
             alt={product.name}
             width={400}
             height={400}
             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300 ease-out"
-            data-ai-hint={product.images[0]?.hint || 'product image'}
+            data-ai-hint={imageHint}
           />
         </Link>
       </CardHeader>

@@ -30,7 +30,6 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
   if (!currentProduct.category) return [];
   try {
     const productsRef = ref(rtdb, 'products');
-    // Query for products in the same category, limit to 5 (current + 4 others)
     const categoryQuery = query(
       productsRef,
       orderByChild('category'),
@@ -41,17 +40,17 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
     if (snapshot.exists()) {
       const productList: ProductType[] = [];
       snapshot.forEach(childSnapshot => {
-        // Exclude the current product itself from related products
         if (childSnapshot.key !== currentProduct.id) {
           productList.push({ id: childSnapshot.key!, ...childSnapshot.val() });
         }
       });
-      return productList.slice(0, 4); // Ensure max 4 related products
+      return productList.slice(0, 4); 
     }
     return [];
   } catch (error) {
-    console.error(`Error fetching related products for category ${currentProduct.category}:`, error);
-    // Gracefully return empty array if query fails (e.g., due to missing index)
+    // Log the error but return an empty array to prevent page crash if index is missing
+    console.error(`Error fetching related products for category ${currentProduct.category}:`, error.message);
+    // You might want to add a more user-friendly error message or logging here
     return []; 
   }
 }
@@ -75,7 +74,7 @@ export async function generateStaticParams() {
 }
 
 interface ProductDetailsPageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; }>;
 }
 
 export default async function ProductDetailsPage({ params: paramsPromise }: ProductDetailsPageProps) {
@@ -138,20 +137,24 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
            <Carousel className="w-full max-w-md mx-auto rounded-lg overflow-hidden shadow-xl border border-border bg-card">
             <CarouselContent>
               {product.images && product.images.length > 0 ? (
-                product.images.map((img, index) => (
-                  <CarouselItem key={index}>
-                    <div className="aspect-square relative">
-                      <Image
-                        src={img.src}
-                        alt={`${product.name} image ${index + 1}`}
-                        fill
-                        className="object-cover"
-                        data-ai-hint={img.hint}
-                        priority={index === 0}
-                      />
-                    </div>
-                  </CarouselItem>
-                ))
+                product.images.map((img, index) => {
+                  const imageSrc = img.src || 'https://placehold.co/600x600.png';
+                  const imageHint = img.src ? (img.hint || 'product photo') : 'placeholder image';
+                  return (
+                    <CarouselItem key={index}>
+                      <div className="aspect-square relative">
+                        <Image
+                          src={imageSrc}
+                          alt={`${product.name} image ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          data-ai-hint={imageHint}
+                          priority={index === 0}
+                        />
+                      </div>
+                    </CarouselItem>
+                  );
+                })
               ) : (
                 <CarouselItem>
                   <div className="aspect-square relative bg-muted flex items-center justify-center">
@@ -171,8 +174,8 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
         </div>
 
         <div className="py-4">
-          {product.category && (
-            <Badge variant="outline" className="mb-2 border-accent text-accent">{product.category.toUpperCase()}</Badge>
+          {product.category && ( // Assuming category is an ID, you might want to fetch category name
+            <Badge variant="outline" className="mb-2 border-accent text-accent">{(product.category).toUpperCase()}</Badge>
           )}
           <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-foreground mb-3">{product.name}</h1>
           
@@ -187,12 +190,12 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
 
           <p className="text-3xl font-extrabold text-primary mb-6">₹{product.price.toFixed(2)}</p>
           
-          {product.mop && (
+          {product.mop && product.mop > product.price && ( // Show MOP only if it's higher than price
             <p className="text-sm text-muted-foreground mb-1">
               M.R.P.: <span className="line-through">₹{product.mop.toFixed(2)}</span>
             </p>
           )}
-           {product.dp && ( // Display Dealer Price if available
+           {product.dp && (
             <p className="text-sm text-muted-foreground mb-1">
               Dealer Price: <span className="font-semibold text-accent">₹{product.dp.toFixed(2)}</span>
             </p>
@@ -209,8 +212,8 @@ export default async function ProductDetailsPage({ params: paramsPromise }: Prod
              <p className="text-sm text-yellow-500 mb-6">Stock level not specified</p>
            )}
 
-          <Button size="lg" className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground transition-colors duration-300">
-            <ShoppingCart className="mr-2 h-5 w-5" /> Add to Cart
+          <Button size="lg" className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground transition-colors duration-300" disabled={product.qty === 0}>
+            <ShoppingCart className="mr-2 h-5 w-5" /> {product.qty === 0 ? "Out of Stock" : "Add to Cart"}
           </Button>
 
           {product.details && Object.keys(product.details).length > 0 && (
