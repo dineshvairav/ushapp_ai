@@ -82,19 +82,19 @@ export default function ProductManagementPage() {
   };
 
   const handleDeleteProduct = async (productId: string, productName: string) => {
-    if (window.confirm(\`Are you sure you want to delete "\${productName}"? This action cannot be undone.\`)) {
+    if (window.confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
       try {
-        await remove(ref(rtdb, \`products/\${productId}\`));
+        await remove(ref(rtdb, `products/${productId}`));
         toast({
           title: "Product Deleted",
-          description: \`"\${productName}" has been successfully deleted.\`,
+          description: `"${productName}" has been successfully deleted.`,
         });
       } catch (err) {
         console.error("Error deleting product:", err);
         toast({
           variant: "destructive",
           title: "Deletion Failed",
-          description: \`Could not delete "\${productName}". Please try again.\`,
+          description: `Could not delete "${productName}". Please try again.`,
         });
       }
     }
@@ -166,11 +166,12 @@ export default function ProductManagementPage() {
                   const imageSrc = firstImage?.src || PLACEHOLDER_IMAGE_URL_64;
                   
                   let imageHint = "product photo";
-                  if (imageSrc === PLACEHOLDER_IMAGE_URL_64) {
+                  if (!firstImage?.src || imageSrc === PLACEHOLDER_IMAGE_URL_64) {
                     imageHint = "placeholder image";
                   } else if (firstImage?.hint) {
                     imageHint = firstImage.hint.split(' ').slice(0, 2).join(' ');
                   }
+
 
                   return (
                     <TableRow key={product.id} className="hover:bg-muted/10">
