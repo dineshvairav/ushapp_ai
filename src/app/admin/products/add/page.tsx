@@ -11,23 +11,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, UploadCloud, Trash2, PackagePlus } from 'lucide-react';
+import { ArrowLeft, UploadCloud, Trash2, PackagePlus, Loader2 } from 'lucide-react';
 import { categories } from '@/data/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-// In a real app, you would save the new product to a database (e.g., Firestore)
+import { rtdb } from '@/lib/firebase'; // Import Realtime Database
+import { ref, set, push } from 'firebase/database';
+import { useToast } from '@/hooks/use-toast';
+import type { Product } from '@/data/products';
 
 export default function AddProductPage() {
   const router = useRouter();
+  const { toast } = useToast();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [stock, setStock] = useState('');
+  const [qty, setQty] = useState(''); // Changed from stock to qty
+  const [mop, setMop] = useState(''); // New state for MOP
+  const [dp, setDp] = useState('');   // New state for DP
   const [category, setCategory] = useState('');
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  // In a real app, you'd manage file objects for upload:
-  // const [imageFiles, setImageFiles] = useState<File[]>([]); 
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -36,14 +40,13 @@ export default function AddProductPage() {
       Array.from(files).forEach(file => {
         newPreviews.push(URL.createObjectURL(file));
       });
-      setImagePreviews(prev => [...prev, ...newPreviews].slice(0, 5)); // Limit to 5 images
+      setImagePreviews(prev => [...prev, ...newPreviews].slice(0, 5));
     }
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
     setImagePreviews(prev => {
       const newPreviews = prev.filter((_, index) => index !== indexToRemove);
-      // Clean up object URL for the removed image
       if (prev[indexToRemove]?.startsWith('blob:')) {
         URL.revokeObjectURL(prev[indexToRemove] as string);
       }
@@ -51,31 +54,55 @@ export default function AddProductPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    const newProductId = `prod_new_${Date.now()}`; // Simple unique ID for demo
-    const newProduct = {
+    setIsLoading(true);
+
+    const newProductRef = push(ref(rtdb, 'products'));
+    const newProductId = newProductRef.key;
+
+    if (!newProductId) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not generate product ID. Please try again.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const newProductData: Product = {
       id: newProductId,
       name,
       description,
       price: parseFloat(price) || 0,
-      stock: stock ? parseInt(stock) : undefined,
+      qty: qty ? parseInt(qty) : undefined,
+      mop: mop ? parseFloat(mop) : undefined,
+      dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: imagePreviews.map(src => ({ src, hint: 'new product' })), // Simplification for demo
+      images: imagePreviews.map(src => ({ src, hint: 'new product' })),
       details: {}, // Add UI for details if needed
     };
 
-    // In a real app, here you would:
-    // 1. Upload new imageFiles if any to a storage service.
-    // 2. Get the URLs of uploaded images.
-    // 3. Construct the new product object with these permanent image URLs.
-    // 4. Save the new product to your database (e.g., Firestore).
-    console.log('Submitting new product:', newProduct);
-    
-    // For demo purposes, we'll navigate back.
-    alert('New product added (simulated)! Check console for data.');
-    router.push('/admin/products');
+    try {
+      await set(newProductRef, newProductData);
+      toast({
+        title: "Product Added",
+        description: `${name} has been successfully added to the database.`,
+      });
+      // Optionally, clear form or redirect
+      // setName(''); setDescription(''); /* ...etc... */ setImagePreviews([]);
+      router.push('/admin/products');
+    } catch (error) {
+      console.error("Error adding product to RTDB:", error);
+      toast({
+        variant: "destructive",
+        title: "Database Error",
+        description: "Could not save the product. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -96,58 +123,90 @@ export default function AddProductPage() {
               <PackagePlus className="h-8 w-8 text-primary" />
               <CardTitle className="text-2xl md:text-3xl text-primary">Add New Product</CardTitle>
             </div>
-            <CardDescription>Fill in the details for the new product.</CardDescription>
+            <CardDescription>Fill in the details for the new product. Data will be saved to Firebase Realtime Database.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="product-name" className="text-foreground">Product Name</Label>
-              <Input 
-                id="product-name" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                required 
+              <Input
+                id="product-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
                 className="bg-input border-input focus:border-primary"
+                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="product-description" className="text-foreground">Description</Label>
-              <Textarea 
-                id="product-description" 
-                value={description} 
-                onChange={(e) => setDescription(e.target.value)} 
-                rows={4} 
+              <Textarea
+                id="product-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
                 className="bg-input border-input focus:border-primary"
+                disabled={isLoading}
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="product-price" className="text-foreground">Price (₹)</Label>
-                <Input 
-                  id="product-price" 
-                  type="number" 
-                  step="0.01" 
-                  value={price} 
-                  onChange={(e) => setPrice(e.target.value)} 
-                  required 
+                <Input
+                  id="product-price"
+                  type="number"
+                  step="0.01"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  required
                   className="bg-input border-input focus:border-primary"
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="product-stock" className="text-foreground">Stock Quantity</Label>
-                <Input 
-                  id="product-stock" 
-                  type="number" 
-                  step="1" 
-                  value={stock} 
-                  onChange={(e) => setStock(e.target.value)} 
+                <Label htmlFor="product-qty" className="text-foreground">Quantity (Qty)</Label>
+                <Input
+                  id="product-qty"
+                  type="number"
+                  step="1"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
                   className="bg-input border-input focus:border-primary"
-                  placeholder="Leave blank if not tracking"
+                  placeholder="Product quantity"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="product-mop" className="text-foreground">MOP (₹)</Label>
+                <Input
+                  id="product-mop"
+                  type="number"
+                  step="0.01"
+                  value={mop}
+                  onChange={(e) => setMop(e.target.value)}
+                  className="bg-input border-input focus:border-primary"
+                  placeholder="Maximum Offer Price"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-dp" className="text-foreground">DP (₹)</Label>
+                <Input
+                  id="product-dp"
+                  type="number"
+                  step="0.01"
+                  value={dp}
+                  onChange={(e) => setDp(e.target.value)}
+                  className="bg-input border-input focus:border-primary"
+                  placeholder="Dealer Price"
+                  disabled={isLoading}
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="product-category" className="text-foreground">Category</Label>
-              <Select value={category} onValueChange={setCategory} required>
+              <Select value={category} onValueChange={setCategory} required disabled={isLoading}>
                 <SelectTrigger id="product-category" className="w-full bg-input border-input focus:border-primary text-foreground">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -165,21 +224,22 @@ export default function AddProductPage() {
                 {imagePreviews.map((src, index) => (
                   <div key={index} className="relative group aspect-square border border-border rounded-md overflow-hidden">
                     <Image src={src} alt={`Preview ${index + 1}`} fill className="object-cover" data-ai-hint="product image preview"/>
-                    <Button 
+                    <Button
                       type="button"
-                      variant="destructive" 
-                      size="icon" 
+                      variant="destructive"
+                      size="icon"
                       className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => handleRemoveImage(index)}
+                      disabled={isLoading}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 ))}
                 {imagePreviews.length < 5 && (
-                  <Label 
+                  <Label
                     htmlFor="product-images-upload"
-                    className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground rounded-md cursor-pointer hover:border-primary hover:bg-muted/20 transition-colors p-2 text-center"
+                    className={`aspect-square flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground rounded-md p-2 text-center ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-primary hover:bg-muted/20 transition-colors'}`}
                   >
                     <UploadCloud className="h-8 w-8 text-muted-foreground mb-1" />
                     <span className="text-xs text-muted-foreground">Add Image(s)</span>
@@ -187,22 +247,24 @@ export default function AddProductPage() {
                   </Label>
                 )}
               </div>
-              <Input 
-                id="product-images-upload" 
-                type="file" 
-                multiple 
-                accept="image/*" 
-                onChange={handleImageUpload} 
+              <Input
+                id="product-images-upload"
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleImageUpload}
                 className="hidden"
+                disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Max 5 images. For this demo, images are only shown as previews and not permanently saved.
+                Max 5 images. Image URLs will be saved to RTDB. For permanent file storage, Firebase Storage integration is needed.
               </p>
             </div>
 
           </CardContent>
           <CardFooter>
-            <Button type="submit" size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button type="submit" size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save New Product
             </Button>
           </CardFooter>

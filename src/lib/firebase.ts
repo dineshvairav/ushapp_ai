@@ -2,8 +2,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-// import { getFirestore, type Firestore } from "firebase/firestore"; // Example for Firestore
-// import { getStorage, type FirebaseStorage } from "firebase/storage"; // Example for Storage
+import { getDatabase, type Database } from "firebase/database"; // Added
 
 // Your web app's Firebase configuration
 // Values are hardcoded here as per the revert request.
@@ -19,8 +18,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp;
 let auth: Auth;
-// let firestore: Firestore; // Example for Firestore
-// let storage: FirebaseStorage; // Example for Storage
+let rtdb: Database; // Added
 
 if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
@@ -29,7 +27,6 @@ if (getApps().length === 0) {
 }
 
 auth = getAuth(app);
-// firestore = getFirestore(app); // Example for Firestore
-// storage = getStorage(app); // Example for Storage
+rtdb = getDatabase(app); // Initialize Realtime Database
 
-export { app, auth }; // Export other services as needed
+export { app, auth, rtdb }; // Export rtdb
