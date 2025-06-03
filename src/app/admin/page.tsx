@@ -148,7 +148,9 @@ export default function AdminPage() {
             <CardDescription className="mb-4">
               Configure global application settings and integrations.
             </CardDescription>
-            <Button variant="outline" size="sm">Configure Settings</Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/settings">Configure Settings</Link>
+            </Button>
           </CardContent>
         </Card>
          <Card className="hover:shadow-primary/20 transition-shadow">

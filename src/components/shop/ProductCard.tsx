@@ -1,20 +1,72 @@
 
+"use client";
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Product } from '@/data/products';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Tag } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { rtdb, auth } from '@/lib/firebase';
+import { ref, onValue } from 'firebase/database';
+import type { User } from 'firebase/auth';
+import type { AppSettings } from '@/app/admin/settings/page'; // Import AppSettings type
 
-interface ProductCardProps {
-  product: Product;
-}
+const defaultCurrencySymbol = '₹'; // Fallback currency
 
 export function ProductCard({ product }: ProductCardProps) {
   const firstImage = product.images?.[0];
   const imageSrc = firstImage?.src || 'https://placehold.co/400x400.png';
-  // If using the placeholder, hint is "placeholder image". Otherwise, use image's hint or "product photo".
   const imageHint = firstImage?.src ? (firstImage.hint || 'product photo') : 'placeholder image';
+
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isDealer, setIsDealer] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [currencySymbol, setCurrencySymbol] = useState(defaultCurrencySymbol);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  useEffect(() => {
+    const settingsRef = ref(rtdb, 'appSettings');
+    const unsubscribeSettings = onValue(settingsRef, (snapshot) => {
+      const data = snapshot.val() as AppSettings | null;
+      if (data && data.currencySymbol) {
+        setCurrencySymbol(data.currencySymbol);
+      } else {
+        setCurrencySymbol(defaultCurrencySymbol);
+      }
+      setIsLoadingSettings(false);
+    }, () => {
+      setCurrencySymbol(defaultCurrencySymbol);
+      setIsLoadingSettings(false);
+    });
+
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        setCurrentUser(user);
+        try {
+          const idTokenResult = await user.getIdTokenResult(true); // Force refresh
+          setIsDealer(idTokenResult.claims.isDealer === true);
+        } catch (error) {
+          console.error("Error fetching custom claims for product card:", error);
+          setIsDealer(false);
+        }
+      } else {
+        setCurrentUser(null);
+        setIsDealer(false);
+      }
+      setIsLoadingAuth(false);
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeSettings();
+    };
+  }, []);
+  
+  const displayPrice = isDealer && product.dp ? product.dp : product.price;
+  const showMop = !isDealer && product.mop && product.mop > product.price;
+
 
   return (
     <Card className="overflow-hidden h-full flex flex-col bg-card border-border hover:shadow-xl hover:border-primary/50 transition-all duration-300 ease-out rounded-lg group">
@@ -29,6 +81,11 @@ export function ProductCard({ product }: ProductCardProps) {
             data-ai-hint={imageHint}
           />
         </Link>
+        {isDealer && product.dp && (
+          <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 text-xs font-semibold rounded-md flex items-center shadow-lg">
+            <Tag size={12} className="mr-1" /> Dealer Price
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-4 flex-grow">
         <CardTitle className="text-lg font-semibold mb-1 leading-tight hover:text-primary transition-colors">
@@ -37,9 +94,20 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
           {product.description}
         </p>
-        <p className="text-xl font-bold text-primary">
-          ₹{product.price.toFixed(2)}
-        </p>
+        {isLoadingSettings || isLoadingAuth ? (
+             <div className="h-7 w-20 bg-muted rounded animate-pulse my-1"></div>
+        ) : (
+        <>
+            <p className="text-xl font-bold text-primary">
+            {currencySymbol}{displayPrice.toFixed(2)}
+            </p>
+            {showMop && product.mop && (
+            <p className="text-xs text-muted-foreground line-through">
+                M.R.P: {currencySymbol}{product.mop.toFixed(2)}
+            </p>
+            )}
+        </>
+        )}
       </CardContent>
       <CardFooter className="p-4 pt-0">
         <Button asChild variant="outline" className="w-full border-accent text-accent hover:bg-accent hover:text-accent-foreground group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
@@ -50,4 +118,8 @@ export function ProductCard({ product }: ProductCardProps) {
       </CardFooter>
     </Card>
   );
+}
+
+interface ProductCardProps {
+  product: Product;
 }
