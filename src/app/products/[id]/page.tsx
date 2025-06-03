@@ -51,7 +51,8 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
     return [];
   } catch (error) {
     console.error(`Error fetching related products for category ${currentProduct.category}:`, error);
-    return [];
+    // Gracefully return empty array if query fails (e.g., due to missing index)
+    return []; 
   }
 }
 
