@@ -78,9 +78,13 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       setMop(initialProduct.mop?.toString() || '');
       setDp(initialProduct.dp?.toString() || '');
       setCategory(initialProduct.category);
-      const currentImages = initialProduct.images.map(img => img.src);
-      setImagePreviews(currentImages);
-      setOriginalImageSrcs(currentImages);
+      
+      const currentImageSrcs = (initialProduct.images && Array.isArray(initialProduct.images))
+        ? initialProduct.images.map(img => img.src)
+        : [];
+      setImagePreviews(currentImageSrcs);
+      setOriginalImageSrcs(currentImageSrcs);
+      
       setIsLoadingState(false);
     } else {
       setProduct(null);
@@ -134,7 +138,8 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     const productPath = `products/${productId}`;
     
     const finalImages = imagePreviews.map(src => {
-        const originalImage = initialProduct?.images.find(img => img.src === src);
+        // Use optional chaining for initialProduct and its images property
+        const originalImage = initialProduct?.images?.find(img => img.src === src);
         if (originalImage) return originalImage;
         if (src.startsWith('blob:')) {
             // For blob URLs, we need to decide how to handle them.
