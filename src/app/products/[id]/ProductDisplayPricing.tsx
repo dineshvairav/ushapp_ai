@@ -6,16 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Star, Tag, Loader2 } from 'lucide-react';
 import type { Product } from '@/data/products';
-import { auth, rtdb } from '@/lib/firebase'; // Import rtdb
-import { ref, onValue } from 'firebase/database'; // Import onValue
+import { auth, rtdb } from '@/lib/firebase'; 
+import { ref, onValue } from 'firebase/database'; 
 import type { User } from 'firebase/auth';
-import type { AppSettings } from '@/app/admin/settings/page'; // Import AppSettings type
+import type { AppSettings } from '@/app/admin/settings/page'; 
 
 interface ProductDisplayPricingProps {
   product: Product;
 }
 
-const defaultCurrencySymbol = '₹'; // Fallback currency
+const defaultCurrencySymbol = '₹'; 
 
 export default function ProductDisplayPricing({ product }: ProductDisplayPricingProps) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -35,7 +35,7 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
       }
       setIsLoadingSettings(false);
     }, () => {
-      setCurrencySymbol(defaultCurrencySymbol); // Fallback on error
+      setCurrencySymbol(defaultCurrencySymbol); 
       setIsLoadingSettings(false);
     });
 
@@ -43,7 +43,7 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
       if (user) {
         setCurrentUser(user);
         try {
-          const idTokenResult = await user.getIdTokenResult(true); // Force refresh token
+          const idTokenResult = await user.getIdTokenResult(true); 
           setIsDealer(idTokenResult.claims.isDealer === true);
         } catch (error) {
           console.error("Error fetching custom claims:", error);
@@ -63,7 +63,8 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
   }, []);
 
   const displayPrice = isDealer && product.dp ? product.dp : product.price;
-  const showMop = !isDealer && product.mop && product.mop > product.price;
+  // Show MOP strikethrough if user is logged in, not a dealer, and MOP exists.
+  const showMop = currentUser && !isDealer && !!product.mop;
 
   if (isLoadingAuth || isLoadingSettings) {
     return (
@@ -82,7 +83,7 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
     <div className="py-4">
       {product.category && (
         <Badge variant="outline" className="mb-2 border-accent text-accent">
-          {product.category.toUpperCase()}
+          {product.category.toUpperCase()} {/* This assumes category ID can be uppercased. Better to fetch category name if available */}
         </Badge>
       )}
       <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-foreground mb-3">{product.name}</h1>
@@ -100,7 +101,7 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
         {currencySymbol}{displayPrice.toFixed(2)}
       </p>
 
-      {showMop && product.mop && (
+      {showMop && product.mop && ( // Ensure product.mop exists before trying to display it
         <p className="text-sm text-muted-foreground mb-1">
           M.R.P.: <span className="line-through">{currencySymbol}{product.mop.toFixed(2)}</span>
         </p>
@@ -111,7 +112,7 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
           <Tag size={14} className="mr-1.5" /> Dealer Price Applied
         </div>
       )}
-       {!isDealer && product.dp && (
+       {!isLoadingAuth && !currentUser && product.dp && ( // Show if not loading auth, not logged in (so not dealer), and DP exists
          <p className="text-xs text-muted-foreground mb-4">(Special dealer pricing available for registered dealers)</p>
        )}
 
@@ -134,7 +135,7 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
         <ShoppingCart className="mr-2 h-5 w-5" /> {product.qty === 0 ? "Out of Stock" : "Add to Cart"}
       </Button>
       
-      {!isLoadingAuth && !isDealer && (
+      {!isLoadingAuth && !isDealer && ( // Show note about dealer pricing if user is not a dealer and auth check is complete
           <p className="text-xs text-muted-foreground mt-4">
             Note: Dealer pricing is available for approved accounts. Admin sets dealer status via Firebase Custom Claims.
           </p>

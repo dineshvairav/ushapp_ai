@@ -20,11 +20,10 @@ export function ProductCard({ product }: ProductCardProps) {
   const firstImage = product.images?.[0];
   const imageSrc = firstImage?.src || PLACEHOLDER_IMAGE_URL_400;
   
-  let imageHint = "product photo"; // Default hint
-  if (imageSrc === PLACEHOLDER_IMAGE_URL_400) {
+  let imageHint = "product photo"; 
+  if (!imageSrc || imageSrc === PLACEHOLDER_IMAGE_URL_400) {
     imageHint = "placeholder image";
   } else if (firstImage?.hint) {
-    // Use provided hint, ensuring it's concise (e.g., first two words)
     imageHint = firstImage.hint.split(' ').slice(0, 2).join(' ');
   }
 
@@ -54,7 +53,7 @@ export function ProductCard({ product }: ProductCardProps) {
       if (user) {
         setCurrentUser(user);
         try {
-          const idTokenResult = await user.getIdTokenResult(true); // Force refresh
+          const idTokenResult = await user.getIdTokenResult(true); 
           setIsDealer(idTokenResult.claims.isDealer === true);
         } catch (error) {
           console.error("Error fetching custom claims for product card:", error);
@@ -74,7 +73,8 @@ export function ProductCard({ product }: ProductCardProps) {
   }, []);
   
   const displayPrice = isDealer && product.dp ? product.dp : product.price;
-  const showMop = !isDealer && product.mop && product.mop > product.price;
+  // Show MOP strikethrough if user is logged in, not a dealer, and MOP exists.
+  const showMop = currentUser && !isDealer && !!product.mop;
 
 
   return (
@@ -110,7 +110,7 @@ export function ProductCard({ product }: ProductCardProps) {
             <p className="text-xl font-bold text-primary">
             {currencySymbol}{displayPrice.toFixed(2)}
             </p>
-            {showMop && product.mop && (
+            {showMop && product.mop && ( // Ensure product.mop exists before trying to display it
             <p className="text-xs text-muted-foreground line-through">
                 M.R.P: {currencySymbol}{product.mop.toFixed(2)}
             </p>
