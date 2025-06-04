@@ -101,9 +101,9 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
         {currencySymbol}{displayPrice.toFixed(2)}
       </p>
 
-      {showMop && product.mop && ( // Ensure product.mop exists before trying to display it
-        <p className="text-sm text-muted-foreground mb-1">
-          M.R.P.: <span className="line-through">{currencySymbol}{product.mop.toFixed(2)}</span>
+      {showMop && product.mop && (
+        <p className="text-sm text-muted-foreground line-through mb-1">
+          M.R.P.: {currencySymbol}{product.mop.toFixed(2)}
         </p>
       )}
 
