@@ -72,9 +72,31 @@ export function ProductCard({ product }: ProductCardProps) {
     };
   }, []);
   
-  const displayPrice = isDealer && product.dp ? product.dp : product.price;
-  // Show MOP strikethrough if user is logged in, not a dealer, and MOP exists.
-  const showMop = currentUser && !isDealer && !!product.mop;
+  let actualSellingPrice: number | null = null;
+  let mrpStrikethroughValue: number | null = null;
+  let shouldShowMrpStrikethrough = false;
+
+  if (!isLoadingAuth && !isLoadingSettings) {
+    if (isDealer && product.dp != null && !isNaN(Number(product.dp))) {
+      actualSellingPrice = Number(product.dp);
+      // Dealers see their price directly, no M.R.P. strikethrough for now.
+    } else {
+      // This block handles non-dealers, or dealers if their DP isn't valid/set.
+      if (product.mop != null && !isNaN(Number(product.mop))) {
+        actualSellingPrice = Number(product.mop);
+        if (product.price > actualSellingPrice) { // Only show original price as strikethrough if it's higher than MOP
+          mrpStrikethroughValue = product.price;
+          shouldShowMrpStrikethrough = true;
+        }
+      } else {
+        actualSellingPrice = product.price; // Fallback to original price if MOP is not available
+      }
+    }
+     // Ensure actualSellingPrice has a fallback if all else fails (e.g. bad data)
+    if (actualSellingPrice === null) {
+        actualSellingPrice = product.price;
+    }
+  }
 
 
   return (
@@ -90,7 +112,7 @@ export function ProductCard({ product }: ProductCardProps) {
             data-ai-hint={imageHint}
           />
         </Link>
-        {isDealer && product.dp && (
+        {isDealer && product.dp != null && !isNaN(Number(product.dp)) && (
           <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 text-xs font-semibold rounded-md flex items-center shadow-lg">
             <Tag size={12} className="mr-1" /> Dealer Price
           </div>
@@ -103,16 +125,16 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
           {product.description}
         </p>
-        {isLoadingSettings || isLoadingAuth ? (
+        {isLoadingSettings || isLoadingAuth || actualSellingPrice === null ? (
              <div className="h-7 w-20 bg-muted rounded animate-pulse my-1"></div>
         ) : (
         <>
             <p className="text-xl font-bold text-primary">
-            {currencySymbol}{displayPrice.toFixed(2)}
+              {currencySymbol}{actualSellingPrice.toFixed(2)}
             </p>
-            {showMop && product.mop && ( // Ensure product.mop exists before trying to display it
+            {shouldShowMrpStrikethrough && mrpStrikethroughValue != null && (
             <p className="text-xs text-muted-foreground line-through">
-                M.R.P: {currencySymbol}{product.mop.toFixed(2)}
+                M.R.P: {currencySymbol}{mrpStrikethroughValue.toFixed(2)}
             </p>
             )}
         </>

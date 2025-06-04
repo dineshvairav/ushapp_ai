@@ -62,11 +62,36 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
     };
   }, []);
 
-  const displayPrice = isDealer && product.dp ? product.dp : product.price;
-  // Show MOP strikethrough if user is logged in, not a dealer, and MOP exists.
-  const showMop = currentUser && !isDealer && !!product.mop;
+  let actualSellingPrice: number | null = null;
+  let mrpStrikethroughValue: number | null = null;
+  let shouldShowMrpStrikethrough = false;
+  let isDealerPriceApplied = false;
 
-  if (isLoadingAuth || isLoadingSettings) {
+  if (!isLoadingAuth && !isLoadingSettings) {
+    if (isDealer && product.dp != null && !isNaN(Number(product.dp))) {
+      actualSellingPrice = Number(product.dp);
+      isDealerPriceApplied = true;
+      // Dealers see their price directly, no M.R.P. strikethrough for now.
+    } else {
+      // This block handles non-dealers, or dealers if their DP isn't valid/set.
+      if (product.mop != null && !isNaN(Number(product.mop))) {
+        actualSellingPrice = Number(product.mop);
+        if (product.price > actualSellingPrice) { // Only show original price as strikethrough if it's higher than MOP
+          mrpStrikethroughValue = product.price;
+          shouldShowMrpStrikethrough = true;
+        }
+      } else {
+        actualSellingPrice = product.price; // Fallback to original price if MOP is not available
+      }
+    }
+    // Ensure actualSellingPrice has a fallback if all else fails
+    if (actualSellingPrice === null) {
+        actualSellingPrice = product.price;
+    }
+  }
+
+
+  if (isLoadingAuth || isLoadingSettings || actualSellingPrice === null) {
     return (
       <div className="py-4">
         <div className="h-8 w-1/3 bg-muted rounded animate-pulse mb-3"></div> {/* Price placeholder */}
@@ -98,16 +123,16 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
       </div>
 
       <p className="text-3xl font-extrabold text-primary mb-1">
-        {currencySymbol}{displayPrice.toFixed(2)}
+        {currencySymbol}{actualSellingPrice.toFixed(2)}
       </p>
 
-      {showMop && product.mop && (
+      {shouldShowMrpStrikethrough && mrpStrikethroughValue != null && (
         <p className="text-sm text-muted-foreground line-through mb-1">
-          M.R.P.: {currencySymbol}{product.mop.toFixed(2)}
+          M.R.P.: {currencySymbol}{mrpStrikethroughValue.toFixed(2)}
         </p>
       )}
 
-      {isDealer && product.dp && (
+      {isDealerPriceApplied && (
         <div className="text-sm text-accent mb-4 font-semibold flex items-center">
           <Tag size={14} className="mr-1.5" /> Dealer Price Applied
         </div>
