@@ -137,8 +137,15 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
         const originalImage = initialProduct?.images.find(img => img.src === src);
         if (originalImage) return originalImage;
         if (src.startsWith('blob:')) {
-            return { src, hint: 'newly uploaded product image' };
+            // For blob URLs, we need to decide how to handle them.
+            // Option 1: Upload them to Firebase Storage and get a persistent URL. (Complex for this scope)
+            // Option 2: Store them as a special type or a placeholder indicating it's a local preview.
+            // For now, let's assume they are temporary and might not persist correctly if not uploaded.
+            // This example will just save the blob URL if it's new, which is not ideal for persistence.
+            // A real app would upload the blob to storage here.
+            return { src, hint: 'newly uploaded product image' }; // Mark as newly uploaded, may need real URL later
         }
+        // If it's an existing non-blob URL, keep its hint or use a generic one
         return { src, hint: 'product image' };
     });
 
@@ -150,7 +157,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       mop: mop ? parseFloat(mop) : undefined,
       dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: finalImages,
+      images: finalImages, // Use the processed images
       details: product?.details || {}, 
     };
 
@@ -173,6 +180,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     }
   };
 
+  // Cleanup blob URLs when component unmounts or imagePreviews change
   useEffect(() => {
     const currentBlobPreviews = imagePreviews.filter(src => src.startsWith('blob:'));
     return () => {
@@ -191,7 +199,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     );
   }
 
-  if (!product && !initialProduct) {
+  if (!product && !initialProduct) { // More robust check
     return (
         <MainAppLayout>
              <div className="text-center py-10">
@@ -249,7 +257,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="product-price" className="text-foreground">Price (₹)</Label>
+                <Label htmlFor="product-price" className="text-foreground">MRP</Label>
                 <Input
                   id="product-price"
                   type="number"
