@@ -7,22 +7,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert } from 'lucide-react';
+import { User as UserIconLucide, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert, FileWarning } from 'lucide-react'; // Renamed User, Added FileWarning
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
 import { onAuthStateChanged, type User, signOut, updateProfile } from "firebase/auth";
-import { auth, rtdb } from '@/lib/firebase';
-import { ref as databaseRef, set, get } from 'firebase/database';
+import { auth, rtdb } from '@/lib/firebase'; // auth and rtdb
+import { ref as databaseRefRtdb, set as setRtdb, get as getRtdb, onValue } from 'firebase/database'; // Aliased RTDB functions
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-
-
-const adminFiles = [
-  { id: 'file1', name: 'Product Catalog Q3 2024.pdf', type: 'pdf', size: '2.5MB', date: '2024-07-15' },
-  { id: 'file2', name: 'Summer Collection Lookbook.jpg', type: 'image', size: '5.1MB', date: '2024-07-10' },
-  { id: 'file3', name: 'Return Policy.pdf', type: 'pdf', size: '300KB', date: '2024-06-01' },
-];
+import type { AdminUploadedFile } from '@/app/admin/uploads/page'; // Import the type
 
 export interface UserProfileData {
   name: string;
@@ -54,25 +48,26 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+  const [adminUploadedFiles, setAdminUploadedFiles] = useState<AdminUploadedFile[]>([]);
+  const [isLoadingAdminFiles, setIsLoadingAdminFiles] = useState(true);
+
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
-        const newAvatarUrl = user.photoURL || DEFAULT_AVATAR_URL;
+        const newAvatarUrl = user.photoURL || DEFAULT_AVAT_AR_URL;
         let isDealerAccount = false;
         let userPhone = '';
 
         try {
           const idTokenResult = await user.getIdTokenResult(true);
           isDealerAccount = idTokenResult.claims.isDealer === true;
-
-          // Fetch phone from RTDB
-          const phoneRef = databaseRef(rtdb, `userProfileData/${user.uid}/phone`);
-          const phoneSnapshot = await get(phoneRef);
+          const phoneRef = databaseRefRtdb(rtdb, `userProfileData/${user.uid}/phone`);
+          const phoneSnapshot = await getRtdb(phoneRef);
           if (phoneSnapshot.exists()) {
             userPhone = phoneSnapshot.val();
           }
-
         } catch (error) {
           console.error("Error fetching custom claims or phone for profile:", error);
         }
@@ -99,15 +94,43 @@ export default function ProfilePage() {
             isDealer: false,
         });
         setAvatarSrc(DEFAULT_AVATAR_URL);
-        router.replace('/onboarding');
+        // No redirect here, allow anonymous users to see shared files
       }
       setIsLoading(false);
     });
-    return () => unsubscribe();
-  }, [router]);
+
+    // Fetch admin uploaded files
+    const filesDbRef = databaseRefRtdb(rtdb, 'adminUploadedFiles');
+    const unsubscribeFiles = onValue(filesDbRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const fileList: AdminUploadedFile[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        })).sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+        setAdminUploadedFiles(fileList);
+      } else {
+        setAdminUploadedFiles([]);
+      }
+      setIsLoadingAdminFiles(false);
+    }, (err) => {
+      console.error("Firebase RTDB read error (adminUploadedFiles for profile):", err);
+      toast({ variant: "destructive", title: "Error", description: "Could not load shared files." });
+      setIsLoadingAdminFiles(false);
+    });
+
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeFiles();
+    };
+  }, [router, toast]);
 
   const handleAvatarClick = () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+        toast({title: "Login Required", description: "Please log in to change your avatar."});
+        return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -134,28 +157,14 @@ export default function ProfilePage() {
     }
 
     try {
-      // Update Firebase Auth display name
       if (auth.currentUser.displayName !== updatedUser.name) {
         await updateProfile(auth.currentUser, { displayName: updatedUser.name });
       }
-      // Note: Updating email or photoURL in Auth profile would typically happen here
-      // For photoURL, you'd first upload the image to Firebase Storage and get the URL.
-      // For email, Firebase might require re-authentication.
-
-      // Update phone in RTDB
       if (userProfile.phone !== updatedUser.phone && updatedUser.firebaseUid) {
-         const phoneRef = databaseRef(rtdb, `userProfileData/${updatedUser.firebaseUid}/phone`);
-         await set(phoneRef, updatedUser.phone || ""); // Save empty string if phone cleared
+         const phoneRef = databaseRefRtdb(rtdb, `userProfileData/${updatedUser.firebaseUid}/phone`);
+         await setRtdb(phoneRef, updatedUser.phone || "");
       }
-
-      setUserProfile(updatedUser); // Update local state
-      // If avatarSrc is a new blob, it won't be reflected in updatedUser.avatarUrl unless explicitly set
-      // For now, avatarUrl from modal save will be the one from initial load (currentUser.photoURL)
-      // or the blob URL if it was just changed locally (which isn't right for persistence)
-      // To fix this properly, if avatarSrc starts with 'blob:', it means a new file was selected but not uploaded.
-      // We should ideally prevent saving a blob URL or handle the upload process.
-      // For this iteration, we rely on the fact that updatedUser.avatarUrl is likely the existing auth.currentUser.photoURL.
-
+      setUserProfile(updatedUser);
       toast({ title: "Profile Updated", description: "Your profile information has been saved." });
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -176,7 +185,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const currentSrc = avatarSrc;
-    // Cleanup for blob URLs
     return () => {
       if (currentSrc && currentSrc.startsWith('blob:')) {
         URL.revokeObjectURL(currentSrc);
@@ -184,17 +192,16 @@ export default function ProfilePage() {
     };
   }, [avatarSrc]);
 
-  const getFileIcon = (fileType: string) => {
-    if (fileType === 'pdf') return <FileText className="h-6 w-6 text-primary" />;
-    if (fileType === 'image') return <ImageIcon className="h-6 w-6 text-accent" />;
-    return <FileText className="h-6 w-6 text-muted-foreground" />;
+  const getFileIcon = (contentType: string) => {
+    if (contentType.startsWith('image/')) return <ImageIcon className="h-6 w-6 text-accent" />;
+    if (contentType === 'application/pdf') return <FileText className="h-6 w-6 text-primary" />; // PDF icon
+    return <FileWarning className="h-6 w-6 text-muted-foreground" />; // Generic file icon
   };
   
   let avatarHint = "profile avatar";
   if (!avatarSrc || avatarSrc === DEFAULT_AVATAR_URL) {
       avatarHint = "avatar placeholder";
   }
-
 
   if (isLoading) {
     return (
@@ -213,10 +220,10 @@ export default function ProfilePage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-              My Profile
+              {currentUser ? "My Profile" : "Shared Files"}
             </h1>
             <p className="text-lg text-muted-foreground">
-              Manage your account details and view your activity.
+              {currentUser ? "Manage your account details and view your activity." : "Access files shared by the admin."}
             </p>
           </div>
           {currentUser && (
@@ -226,48 +233,38 @@ export default function ProfilePage() {
           )}
         </div>
 
+        {currentUser && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Card className="lg:col-span-1 bg-card border-border">
             <CardHeader className="items-center text-center">
-              {currentUser && (
                 <div className="relative group cursor-pointer" onClick={handleAvatarClick} role="button" tabIndex={0}
                     aria-label="Change profile picture">
                   <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
-                    <AvatarImage src={avatarSrc} alt={userProfile.name} data-ai-hint={avatarHint} />
+                    <AvatarImage src={avatarSrc} alt={userProfile.name} data-ai-hint={avatarHint}/>
                     <AvatarFallback>{userProfile.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <Camera className="h-8 w-8 text-white" />
                   </div>
                 </div>
-              )}
-              {!currentUser && (
-                 <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
-                    <AvatarImage src={DEFAULT_AVATAR_URL} alt="Guest User" data-ai-hint="avatar placeholder" />
-                    <AvatarFallback>GU</AvatarFallback>
-                  </Avatar>
-              )}
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 accept="image/*"
                 className="hidden"
-                disabled={!currentUser}
               />
               <CardTitle className="text-2xl">{userProfile.name}</CardTitle>
               <CardDescription>{userProfile.email}</CardDescription>
-              {currentUser && userProfile.isDealer && (
+              {userProfile.isDealer && (
                 <Badge variant="secondary" className="mt-2 bg-accent text-accent-foreground">
                   <ShieldAlert className="mr-1.5 h-4 w-4" /> Dealer Account
                 </Badge>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {currentUser && (
-                <>
                   <div className="flex items-center text-sm">
-                    <UserIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <UserIconLucide className="mr-2 h-4 w-4 text-muted-foreground" />
                     <span>Joined on {userProfile.joinDate}</span>
                   </div>
                   <div className="flex items-center text-sm">
@@ -278,76 +275,116 @@ export default function ProfilePage() {
                   <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10" onClick={handleLogout}>
                       <LogOut className="mr-2 h-4 w-4" /> Log Out
                   </Button>
-                </>
-              )}
-               {!currentUser && (
-                 <Button asChild className="w-full">
-                   <Link href="/onboarding">Log In / Sign Up</Link>
-                 </Button>
-               )}
             </CardContent>
           </Card>
-
-          <Card className="lg:col-span-2 bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-xl">Admin Uploaded Files</CardTitle>
-              <CardDescription>
-                Important documents and images shared by the ushªOªppteam.
-              </CardDescription>
+           {/* Admin uploaded files shown in the second column if user is logged in */}
+           <Card className="lg:col-span-2 bg-card border-border">
+             <CardHeader>
+                <CardTitle className="text-xl">Shared Documents</CardTitle>
+                <CardDescription>
+                    Files uploaded by the admin team.
+                </CardDescription>
             </CardHeader>
             <CardContent>
-              {adminFiles.length > 0 ? (
+              {isLoadingAdminFiles ? (
+                <div className="flex justify-center items-center py-10">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : adminUploadedFiles.length > 0 ? (
                 <ul className="space-y-4">
-                  {adminFiles.map((file) => (
+                  {adminUploadedFiles.map((file) => (
                     <li key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border hover:border-primary/50 transition-colors">
                       <div className="flex items-center gap-3">
-                        {getFileIcon(file.type)}
+                        {getFileIcon(file.contentType)}
                         <div>
-                          <p className="font-medium text-foreground">{file.name}</p>
+                          <p className="font-medium text-foreground truncate max-w-xs sm:max-w-sm md:max-w-md" title={file.fileName}>{file.fileName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {file.size} - Uploaded: {file.date}
+                            { (file.size / (1024 * 1024)).toFixed(2) } MB - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" aria-label={`Download ${file.name}`}>
-                        <Download className="h-5 w-5 text-accent hover:text-accent/80" />
+                      <Button asChild variant="ghost" size="icon" aria-label={`Download ${file.fileName}`}>
+                        <a href={file.downloadURL} target="_blank" rel="noopener noreferrer" download={file.fileName}>
+                            <Download className="h-5 w-5 text-accent hover:text-accent/80" />
+                        </a>
                       </Button>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="text-muted-foreground text-center py-6">
-                  No files have been uploaded by the admin yet.
+                  No files have been shared by the admin yet.
                 </p>
               )}
             </CardContent>
           </Card>
         </div>
+        )}
 
+        {!currentUser && ( // Display shared files full-width for anonymous users
+            <Card className="bg-card border-border">
+                <CardHeader>
+                    <CardTitle className="text-xl">Shared Documents</CardTitle>
+                    <CardDescription>
+                        Files uploaded by the admin team.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingAdminFiles ? (
+                    <div className="flex justify-center items-center py-10">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : adminUploadedFiles.length > 0 ? (
+                    <ul className="space-y-4">
+                      {adminUploadedFiles.map((file) => (
+                        <li key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border hover:border-primary/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            {getFileIcon(file.contentType)}
+                            <div>
+                              <p className="font-medium text-foreground truncate max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl" title={file.fileName}>{file.fileName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                { (file.size / (1024 * 1024)).toFixed(2) } MB - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <Button asChild variant="ghost" size="icon" aria-label={`Download ${file.fileName}`}>
+                            <a href={file.downloadURL} target="_blank" rel="noopener noreferrer" download={file.fileName}>
+                                <Download className="h-5 w-5 text-accent hover:text-accent/80" />
+                            </a>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-6">
+                      No files have been shared by the admin yet.
+                    </p>
+                  )}
+                </CardContent>
+            </Card>
+        )}
+
+
+        {currentUser && (
         <Card className="bg-card border-border">
             <CardHeader>
                 <CardTitle className="text-xl">Order History</CardTitle>
                 <CardDescription>View your past orders and their status.</CardDescription>
             </CardHeader>
             <CardContent>
-                {currentUser ? (
-                     <p className="text-muted-foreground text-center py-6">No orders placed yet.</p>
-                ) : (
-                    <p className="text-muted-foreground text-center py-6">Please log in to see your order history.</p>
-                )}
+                 <p className="text-muted-foreground text-center py-6">No orders placed yet.</p>
             </CardContent>
         </Card>
+        )}
       </div>
       {currentUser && (
         <EditProfileModal
           isOpen={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
-          currentUser={userProfile} // Pass the full userProfile, which now includes phone
+          currentUser={userProfile}
           onSave={handleProfileSave}
         />
       )}
     </MainAppLayout>
   );
 }
-
-    

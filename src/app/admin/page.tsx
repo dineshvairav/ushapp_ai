@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, ListTree, Loader2 } from 'lucide-react';
+import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, ListTree, Loader2, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from '@/lib/firebase';
@@ -120,6 +120,22 @@ export default function AdminPage() {
             </CardDescription>
             <Button asChild variant="outline" size="sm">
               <Link href="/admin/categories">Manage Categories</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-primary/20 transition-shadow">
+          <CardHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <UploadCloud className="h-7 w-7 text-primary" />
+              <CardTitle className="text-xl">File Uploads</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Upload and manage shared files like invoices or documents.
+            </CardDescription>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/uploads">Manage Files</Link>
             </Button>
           </CardContent>
         </Card>
