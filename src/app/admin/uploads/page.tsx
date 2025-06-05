@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 
 const ADMIN_EMAIL = 'dineshvairav@gmail.com';
-const ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf";
+const ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf"; // Added .pdf for better matching
 
 export interface AdminUploadedFile {
   id: string;
@@ -112,11 +112,15 @@ export default function FileUploadPage() {
     setUploadProgress(0);
 
     const storage = getStorage();
-    // Create a unique file path
     const filePath = `adminUploads/${new Date().getTime()}-${selectedFile.name}`;
     const fileStorageRef = storageRef(storage, filePath);
 
-    const uploadTask = uploadBytesResumable(fileStorageRef, selectedFile);
+    // Explicitly set content type for the upload
+    const metadata = {
+      contentType: selectedFile.type
+    };
+
+    const uploadTask = uploadBytesResumable(fileStorageRef, selectedFile, metadata);
 
     uploadTask.on('state_changed',
       (snapshot) => {
@@ -125,7 +129,7 @@ export default function FileUploadPage() {
       },
       (error) => {
         console.error("Upload error:", error);
-        toast({ variant: "destructive", title: "Upload Failed", description: error.message });
+        toast({ variant: "destructive", title: "Upload Failed", description: `Upload failed: ${error.code} - ${error.message}` });
         setIsUploading(false);
         setUploadProgress(0);
       },
@@ -137,7 +141,7 @@ export default function FileUploadPage() {
           const fileData: Omit<AdminUploadedFile, 'id'> = {
             fileName: selectedFile.name,
             downloadURL,
-            contentType: selectedFile.type,
+            contentType: selectedFile.type, // Use the selected file's type
             size: selectedFile.size,
             uploadedAt: new Date().toISOString(),
             uploadedByEmail: currentUser.email,
@@ -153,7 +157,6 @@ export default function FileUploadPage() {
         } finally {
             setIsUploading(false);
             setUploadProgress(0);
-            // Clear the file input
             const fileInput = document.getElementById('file-upload-input') as HTMLInputElement;
             if (fileInput) fileInput.value = '';
         }
@@ -167,19 +170,12 @@ export default function FileUploadPage() {
     }
 
     try {
-      // Delete from Storage
       const storage = getStorage();
-      // Extract path from downloadURL (this is a bit fragile, assumes Firebase Storage URL structure)
-      // A more robust way is to store the storagePath in RTDB as well.
-      // For now, we attempt to derive it. Example: gs://<bucket>/adminUploads/timestamp-filename.ext
       const urlPathSegment = file.downloadURL.split('/o/')[1].split('?')[0];
-      const decodedPath = decodeURIComponent(urlPathSegment); // e.g. adminUploads/timestamp-filename.ext
+      const decodedPath = decodeURIComponent(urlPathSegment); 
       const fileStorageRef = storageRef(storage, decodedPath);
       await deleteObject(fileStorageRef);
-
-      // Delete from RTDB
       await remove(databaseRef(rtdb, `adminUploadedFiles/${file.id}`));
-
       toast({ title: "File Deleted", description: `${file.fileName} has been deleted.` });
     } catch (error: any) {
       console.error("Error deleting file:", error);
@@ -249,7 +245,7 @@ export default function FileUploadPage() {
         <CardContent className="text-sm text-destructive/80 space-y-1 pl-12">
             <p>Uploaded files are stored in Firebase Storage and metadata in Realtime Database. Ensure your Firebase Security Rules are configured appropriately:</p>
             <ul className="list-disc list-inside pl-4">
-                <li><strong>Storage Rules:</strong> Restrict write access to this `adminUploads/` path to authenticated admins only. Configure read access as needed (e.g., public read for download URLs).</li>
+                <li><strong>Storage Rules:</strong> Restrict write access to this `adminUploads/` path to authenticated admins (e.g., checking `request.auth.token.email == '{ADMIN_EMAIL}'` or a custom claim). Configure read access as needed (e.g., public read for download URLs).</li>
                 <li><strong>RTDB Rules:</strong> Restrict write access to `adminUploadedFiles` path to admins. Configure read access for users.</li>
             </ul>
             <p className="mt-2">This page uses client-side admin checks. For production, robust server-side validation and custom claims are recommended.</p>
@@ -372,3 +368,5 @@ export default function FileUploadPage() {
   );
 }
 
+
+    
