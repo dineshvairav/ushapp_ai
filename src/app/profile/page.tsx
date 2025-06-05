@@ -56,7 +56,7 @@ export default function ProfilePage() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
-        const newAvatarUrl = user.photoURL || DEFAULT_AVAT_AR_URL;
+        const newAvatarUrl = user.photoURL || DEFAULT_AVATAR_URL;
         let isDealerAccount = false;
         let userPhone = '';
 
