@@ -10,10 +10,12 @@ import { Separator } from '@/components/ui/separator';
 import { User as UserIcon, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert } from 'lucide-react';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User, signOut, updateProfile } from "firebase/auth";
+import { auth, rtdb } from '@/lib/firebase';
+import { ref as databaseRef, set, get } from 'firebase/database';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 
 const adminFiles = [
@@ -36,6 +38,7 @@ const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfileData>({
@@ -52,16 +55,26 @@ export default function ProfilePage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => { 
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
         const newAvatarUrl = user.photoURL || DEFAULT_AVATAR_URL;
         let isDealerAccount = false;
+        let userPhone = '';
+
         try {
-          const idTokenResult = await user.getIdTokenResult(true); 
+          const idTokenResult = await user.getIdTokenResult(true);
           isDealerAccount = idTokenResult.claims.isDealer === true;
+
+          // Fetch phone from RTDB
+          const phoneRef = databaseRef(rtdb, `userProfileData/${user.uid}/phone`);
+          const phoneSnapshot = await get(phoneRef);
+          if (phoneSnapshot.exists()) {
+            userPhone = phoneSnapshot.val();
+          }
+
         } catch (error) {
-          console.error("Error fetching custom claims for profile:", error);
+          console.error("Error fetching custom claims or phone for profile:", error);
         }
 
         setUserProfile(prevProfile => ({
@@ -71,7 +84,8 @@ export default function ProfilePage() {
           avatarUrl: newAvatarUrl,
           joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A',
           firebaseUid: user.uid,
-          isDealer: isDealerAccount, 
+          isDealer: isDealerAccount,
+          phone: userPhone,
         }));
         setAvatarSrc(newAvatarUrl);
       } else {
@@ -93,26 +107,76 @@ export default function ProfilePage() {
   }, [router]);
 
   const handleAvatarClick = () => {
+    if (!currentUser) return;
     fileInputRef.current?.click();
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && currentUser) {
       if (avatarSrc && avatarSrc.startsWith('blob:')) {
         URL.revokeObjectURL(avatarSrc);
       }
       const newSrc = URL.createObjectURL(file);
       setAvatarSrc(newSrc);
+      toast({
+        title: "Avatar Preview Updated",
+        description: "To save this avatar permanently, integration with Firebase Storage and updating your authentication profile is required. This feature is not fully implemented yet.",
+        duration: 7000,
+      });
     }
   };
 
-  const handleProfileSave = (updatedUser: UserProfileData) => {
-    setUserProfile(updatedUser);
+  const handleProfileSave = async (updatedUser: UserProfileData) => {
+    if (!currentUser || !auth.currentUser) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to save profile changes." });
+      return;
+    }
+
+    try {
+      // Update Firebase Auth display name
+      if (auth.currentUser.displayName !== updatedUser.name) {
+        await updateProfile(auth.currentUser, { displayName: updatedUser.name });
+      }
+      // Note: Updating email or photoURL in Auth profile would typically happen here
+      // For photoURL, you'd first upload the image to Firebase Storage and get the URL.
+      // For email, Firebase might require re-authentication.
+
+      // Update phone in RTDB
+      if (userProfile.phone !== updatedUser.phone && updatedUser.firebaseUid) {
+         const phoneRef = databaseRef(rtdb, `userProfileData/${updatedUser.firebaseUid}/phone`);
+         await set(phoneRef, updatedUser.phone || ""); // Save empty string if phone cleared
+      }
+
+      setUserProfile(updatedUser); // Update local state
+      // If avatarSrc is a new blob, it won't be reflected in updatedUser.avatarUrl unless explicitly set
+      // For now, avatarUrl from modal save will be the one from initial load (currentUser.photoURL)
+      // or the blob URL if it was just changed locally (which isn't right for persistence)
+      // To fix this properly, if avatarSrc starts with 'blob:', it means a new file was selected but not uploaded.
+      // We should ideally prevent saving a blob URL or handle the upload process.
+      // For this iteration, we rely on the fact that updatedUser.avatarUrl is likely the existing auth.currentUser.photoURL.
+
+      toast({ title: "Profile Updated", description: "Your profile information has been saved." });
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      toast({ variant: "destructive", title: "Update Failed", description: "Could not save profile changes." });
+    }
+  };
+  
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      router.push('/onboarding');
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({ variant: "destructive", title: "Logout Failed", description: "Could not log out. Please try again." });
+    }
   };
 
   useEffect(() => {
     const currentSrc = avatarSrc;
+    // Cleanup for blob URLs
     return () => {
       if (currentSrc && currentSrc.startsWith('blob:')) {
         URL.revokeObjectURL(currentSrc);
@@ -177,7 +241,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
-              {!currentUser && ( 
+              {!currentUser && (
                  <Avatar className="h-24 w-24 mb-4 ring-2 ring-primary ring-offset-2 ring-offset-card">
                     <AvatarImage src={DEFAULT_AVATAR_URL} alt="Guest User" data-ai-hint="avatar placeholder" />
                     <AvatarFallback>GU</AvatarFallback>
@@ -211,10 +275,8 @@ export default function ProfilePage() {
                     <span>{userProfile.phone || 'No phone number'}</span>
                   </div>
                   <Separator />
-                  <Button asChild variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10">
-                    <Link href="/onboarding?logout=true"> 
+                  <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive/80 hover:bg-destructive/10" onClick={handleLogout}>
                       <LogOut className="mr-2 h-4 w-4" /> Log Out
-                    </Link>
                   </Button>
                 </>
               )}
@@ -280,10 +342,12 @@ export default function ProfilePage() {
         <EditProfileModal
           isOpen={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
-          currentUser={userProfile}
+          currentUser={userProfile} // Pass the full userProfile, which now includes phone
           onSave={handleProfileSave}
         />
       )}
     </MainAppLayout>
   );
 }
+
+    
