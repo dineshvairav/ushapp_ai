@@ -3,7 +3,7 @@ import type { Product as ProductType } from '@/data/products';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, PackageOpen, Loader2 } from 'lucide-react';
+import { ChevronLeft, PackageOpen } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -21,11 +21,12 @@ async function getProductFromDB(id: string): Promise<ProductType | undefined> {
     const productRef = child(ref(rtdb, 'products'), id);
     const snapshot = await get(productRef);
     if (snapshot.exists()) {
-      return { id: snapshot.key, ...snapshot.val() } as ProductType;
+      return { id: snapshot.key as string, ...snapshot.val() } as ProductType;
     }
+    console.log(`Product Details: Product with ID ${id} not found in DB.`);
     return undefined;
   } catch (error) {
-    console.error(`Error fetching product ${id} from RTDB:`, error);
+    console.error(`Product Details: RTDB Error in getProductFromDB for ID ${id}:`, error);
     return undefined;
   }
 }
@@ -80,45 +81,36 @@ export async function generateStaticParams() {
 }
 
 interface ProductDetailsPageProps {
-  params: Promise<{ id: string; }>;
+  params: { id: string; };
 }
 
-export default async function ProductDetailsPage({ params: paramsPromise }: ProductDetailsPageProps) {
-  const { id } = await paramsPromise;
-  const product = await getProductFromDB(id);
+export default async function ProductDetailsPage({ params }: ProductDetailsPageProps) {
+  const { id } = params;
+  let product: ProductType | undefined;
   let relatedProducts: ProductType[] = [];
+  let fetchError: string | null = null;
 
-  if (product) {
-    relatedProducts = await getRelatedProducts(product);
+  try {
+    product = await getProductFromDB(id);
+    if (product) {
+      relatedProducts = await getRelatedProducts(product);
+    }
+  } catch (error) {
+    console.error(`Failed to fetch product details or related products for ${id}:`, error);
+    fetchError = error instanceof Error ? error.message : "An unknown error occurred fetching product data.";
   }
 
-
-  if (product === undefined && id) {
-     return (
-      <MainAppLayout>
-        <div className="text-center py-10">
-          <Loader2 className="mx-auto h-16 w-16 text-primary animate-spin mb-4" />
-          <h1 className="text-2xl font-semibold text-foreground mb-2">Loading Product Details...</h1>
-          <p className="text-muted-foreground mb-6">Attempting to fetch product with ID "{id}" from the database.</p>
-          <p className="text-xs text-muted-foreground">If this persists, the product may not exist or there might be a connection issue.</p>
-          <Button asChild variant="link" className="mt-4 text-primary">
-            <Link href="/shop">
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Back to Shop
-            </Link>
-          </Button>
-        </div>
-      </MainAppLayout>
-    );
-  }
-
-  if (!product) {
+  if (fetchError || !product) {
     return (
       <MainAppLayout>
         <div className="text-center py-20">
           <PackageOpen className="mx-auto h-16 w-16 text-destructive mb-4" />
-          <h1 className="text-2xl font-semibold">Product not found</h1>
-          <p className="text-muted-foreground mb-6">The product with ID "{id}" could not be found in the database.</p>
+          <h1 className="text-2xl font-semibold text-foreground">Product Not Found or Error</h1>
+          <p className="text-muted-foreground mb-6">
+             {fetchError 
+              ? `Error: ${fetchError}` 
+              : `The product with ID "${id}" could not be found.`}
+          </p>
           <Link href="/shop">
             <Button variant="link" className="mt-4 text-primary">
              <ChevronLeft className="mr-2 h-4 w-4" />
