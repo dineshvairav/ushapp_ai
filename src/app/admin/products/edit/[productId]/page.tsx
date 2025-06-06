@@ -26,10 +26,6 @@ export async function generateStaticParams() {
   }
 }
 
-interface EditProductServerPageProps {
-  params: { productId: string };
-}
-
 // Fetches a single product from RTDB
 async function getProductFromDB(productId: string): Promise<Product | undefined> {
   try {
@@ -46,16 +42,16 @@ async function getProductFromDB(productId: string): Promise<Product | undefined>
   }
 }
 
-export default async function EditProductServerPage({ params }: EditProductServerPageProps) {
+export default async function EditProductServerPage({ params }: { params: { productId: string } }) {
   const { productId } = params;
   let product: Product | undefined;
   let fetchError: string | null = null;
 
   try {
     product = await getProductFromDB(productId);
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Failed to fetch product ${productId} in EditProductServerPage:`, error);
-    fetchError = error instanceof Error ? error.message : "An unknown error occurred during product fetch.";
+    fetchError = error.message || "An unknown error occurred during product fetch.";
   }
   
   if (fetchError || !product) {
