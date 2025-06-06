@@ -42,7 +42,15 @@ async function getProductFromDB(productId: string): Promise<Product | undefined>
   }
 }
 
-export default async function EditProductServerPage({ params }: { params: { productId: string } }) {
+// Define the type for the props expected by this page component
+type EditProductServerPageProps = {
+  params: { productId: string };
+  // searchParams could also be added here if needed:
+  // searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+export default async function EditProductServerPage(props: EditProductServerPageProps) {
+  const { params } = props; // Destructure params from the typed props
   const { productId } = params;
   let product: Product | undefined;
   let fetchError: string | null = null;
