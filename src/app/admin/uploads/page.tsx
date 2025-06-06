@@ -12,14 +12,15 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, UploadCloud, FileIcon, Trash2, Loader2, AlertTriangle, Download } from 'lucide-react';
-import { auth, rtdb } from '@/lib/firebase';
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { ref as databaseRef, onValue, push, set, remove, serverTimestamp } from 'firebase/database';
+import { auth, rtdb, app as firebaseApp } from '@/lib/firebase'; // Imported firebaseApp
+import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"; // Renamed storageRef to avoid conflict
+import { ref as databaseRef, onValue, push, set, remove } from 'firebase/database'; // serverTimestamp was unused
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 
 const ADMIN_EMAIL = 'dineshvairav@gmail.com';
-const ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf"; // Added .pdf for better matching
+const ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app"; // Bucket specified by user
 
 export interface AdminUploadedFile {
   id: string;
@@ -71,7 +72,7 @@ export default function FileUploadPage() {
         const fileList: AdminUploadedFile[] = Object.keys(data).map(key => ({
           id: key,
           ...data[key]
-        })).sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()); // Sort newest first
+        })).sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
         setUploadedFiles(fileList);
         setErrorFiles(null);
       } else {
@@ -111,13 +112,15 @@ export default function FileUploadPage() {
     setIsUploading(true);
     setUploadProgress(0);
 
-    const storage = getStorage();
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Explicitly use the app and bucket URI
     const filePath = `adminUploads/${new Date().getTime()}-${selectedFile.name}`;
-    const fileStorageRef = storageRef(storage, filePath);
+    const fileStorageRef = storageRefStandard(storage, filePath);
 
-    // Explicitly set content type for the upload
+    console.log('Attempting to upload file:', selectedFile.name, 'Type:', selectedFile.type, 'Size:', selectedFile.size);
+    console.log('Target Storage Path:', fileStorageRef.toString());
+
     const metadata = {
-      contentType: selectedFile.type
+      contentType: selectedFile.type || 'application/octet-stream' // Fallback contentType
     };
 
     const uploadTask = uploadBytesResumable(fileStorageRef, selectedFile, metadata);
@@ -129,7 +132,13 @@ export default function FileUploadPage() {
       },
       (error) => {
         console.error("Upload error:", error);
-        toast({ variant: "destructive", title: "Upload Failed", description: `Upload failed: ${error.code} - ${error.message}` });
+        let detailedErrorMessage = `Upload failed: ${error.code} - ${error.message}.`;
+        if (error.code === 'storage/unauthorized') {
+          detailedErrorMessage += " Please check Firebase Storage security rules for write access to this path.";
+        } else if (error.code === 'storage/object-not-found' || error.code === 'storage/bucket-not-found') {
+          detailedErrorMessage += " Please ensure the storage bucket is correctly configured and accessible.";
+        }
+        toast({ variant: "destructive", title: "Upload Failed", description: detailedErrorMessage, duration: 7000 });
         setIsUploading(false);
         setUploadProgress(0);
       },
@@ -141,7 +150,7 @@ export default function FileUploadPage() {
           const fileData: Omit<AdminUploadedFile, 'id'> = {
             fileName: selectedFile.name,
             downloadURL,
-            contentType: selectedFile.type, // Use the selected file's type
+            contentType: selectedFile.type,
             size: selectedFile.size,
             uploadedAt: new Date().toISOString(),
             uploadedByEmail: currentUser.email,
@@ -170,16 +179,52 @@ export default function FileUploadPage() {
     }
 
     try {
-      const storage = getStorage();
-      const urlPathSegment = file.downloadURL.split('/o/')[1].split('?')[0];
-      const decodedPath = decodeURIComponent(urlPathSegment); 
-      const fileStorageRef = storageRef(storage, decodedPath);
-      await deleteObject(fileStorageRef);
+      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Use specific bucket
+      // Construct the GCS path from the download URL. This is a bit fragile.
+      // A more robust way is to store the full GCS path in RTDB if possible.
+      // Example: gs://<bucket_name>/adminUploads/timestamp-filename.pdf
+      // For now, we try to derive it from downloadURL, which works for default Firebase Storage URLs.
+      let storagePath = '';
+      try {
+        const url = new URL(file.downloadURL);
+        // Pathname for Firebase Storage download URLs is usually /v0/b/<bucket>/o/<path_to_file>
+        const pathSegments = url.pathname.split('/o/');
+        if (pathSegments.length > 1) {
+          storagePath = decodeURIComponent(pathSegments[1]);
+        } else {
+          throw new Error("Cannot determine storage path from download URL for deletion.");
+        }
+      } catch(urlParseError) {
+         console.error("Could not parse download URL to derive storage path:", file.downloadURL, urlParseError);
+         throw new Error("Could not determine file path in storage for deletion. URL format might be unexpected.");
+      }
+
+      if (!storagePath) {
+        throw new Error("Storage path for deletion is empty.");
+      }
+      
+      const fileToDeleteStorageRef = storageRefStandard(storage, storagePath);
+      await deleteObject(fileToDeleteStorageRef);
       await remove(databaseRef(rtdb, `adminUploadedFiles/${file.id}`));
       toast({ title: "File Deleted", description: `${file.fileName} has been deleted.` });
     } catch (error: any) {
       console.error("Error deleting file:", error);
-      toast({ variant: "destructive", title: "Deletion Failed", description: error.message || `Could not delete ${file.fileName}.` });
+      let detailedErrorMessage = `Could not delete ${file.fileName}.`;
+      if (error.code === 'storage/object-not-found') {
+          detailedErrorMessage += " The file was not found in storage (it might have been already deleted). Proceeding to remove from list.";
+          // If storage deletion fails because it's not found, still try to remove from RTDB.
+          try {
+            await remove(databaseRef(rtdb, `adminUploadedFiles/${file.id}`));
+            toast({ title: "File Removed from List", description: `${file.fileName} was not found in storage but removed from database list.` });
+            return; // Exit early as RTDB removal was attempted
+          } catch (rtdbDeleteError) {
+            console.error("Error removing file from RTDB after storage/object-not-found:", rtdbDeleteError);
+            detailedErrorMessage += " Also failed to remove from database list.";
+          }
+      } else if (error.message) {
+        detailedErrorMessage = error.message;
+      }
+      toast({ variant: "destructive", title: "Deletion Failed", description: detailedErrorMessage, duration: 7000 });
     }
   };
 
@@ -243,12 +288,12 @@ export default function FileUploadPage() {
           </div>
         </CardHeader>
         <CardContent className="text-sm text-destructive/80 space-y-1 pl-12">
-            <p>Uploaded files are stored in Firebase Storage and metadata in Realtime Database. Ensure your Firebase Security Rules are configured appropriately:</p>
+            <p>Uploaded files are stored in Firebase Storage (Bucket: <strong>{TARGET_STORAGE_BUCKET}</strong>) and metadata in Realtime Database. Ensure your Firebase Security Rules are configured appropriately:</p>
             <ul className="list-disc list-inside pl-4">
-                <li><strong>Storage Rules:</strong> Restrict write access to this `adminUploads/` path to authenticated admins (e.g., checking `request.auth.token.email == '{ADMIN_EMAIL}'` or a custom claim). Configure read access as needed (e.g., public read for download URLs).</li>
+                <li><strong>Storage Rules:</strong> Restrict write access to the `adminUploads/` path to authenticated admins. Configure read access as needed.</li>
                 <li><strong>RTDB Rules:</strong> Restrict write access to `adminUploadedFiles` path to admins. Configure read access for users.</li>
             </ul>
-            <p className="mt-2">This page uses client-side admin checks. For production, robust server-side validation and custom claims are recommended.</p>
+            <p className="mt-2">This page uses client-side admin checks. For production, robust server-side validation and custom claims are recommended for admin access.</p>
         </CardContent>
       </Card>
 
@@ -367,6 +412,6 @@ export default function FileUploadPage() {
     </MainAppLayout>
   );
 }
-
+    
 
     
