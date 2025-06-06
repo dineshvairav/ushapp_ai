@@ -49,8 +49,9 @@ type EditProductServerPageProps = {
   // searchParams?: { [key: string]: string | string[] | undefined };
 };
 
-export default async function EditProductServerPage(props: EditProductServerPageProps) {
-  const { params } = props; // Destructure params from the typed props
+export default async function EditProductServerPage({
+  params,
+}: PageProps<{ params: { productId: string } }>) {
   const { productId } = params;
   let product: Product | undefined;
   let fetchError: string | null = null;
@@ -61,7 +62,7 @@ export default async function EditProductServerPage(props: EditProductServerPage
     console.error(`Failed to fetch product ${productId} in EditProductServerPage:`, error);
     fetchError = error.message || "An unknown error occurred during product fetch.";
   }
-  
+
   if (fetchError || !product) {
     return (
       <MainAppLayout>
@@ -69,8 +70,8 @@ export default async function EditProductServerPage(props: EditProductServerPage
           <PackageOpen className="mx-auto h-16 w-16 text-destructive mb-4" />
           <h1 className="text-2xl font-semibold text-foreground mb-2">Product Not Found or Error</h1>
           <p className="text-muted-foreground mb-6">
-            {fetchError 
-              ? `Error fetching product: ${fetchError}` 
+            {fetchError
+              ? `Error fetching product: ${fetchError}`
               : `The product with ID "${productId}" could not be found.`}
           </p>
           <Button asChild variant="outline">
