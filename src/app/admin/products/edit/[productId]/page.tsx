@@ -45,7 +45,7 @@ async function getProductFromDB(productId: string): Promise<Product | undefined>
 export default async function EditProductServerPage({
   params,
 }: {
-  params: { productId: string };
+  params: Awaited<ReturnType<typeof generateStaticParams>>[number];
 }) {
   const { productId } = params;
   let product: Product | undefined;
