@@ -48,8 +48,7 @@ async function getProductFromDB(productId: string): Promise<Product | undefined>
 }
 
 export default async function EditProductServerPage({ params }: EditProductServerPageProps) {
-  const resolvedParams = await params;
-  const { productId } = resolvedParams;
+  const { productId } = params;
   
   // Fetch product from RTDB
   const product = await getProductFromDB(productId);
