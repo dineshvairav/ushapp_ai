@@ -1,22 +1,26 @@
 
 "use client";
 
-import { useState, useRef, useEffect, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User as UserIconLucide, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert, FileWarning } from 'lucide-react'; // Renamed User, Added FileWarning
+import { User as UserIconLucide, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert, FileWarning, UploadCloud, Trash2 } from 'lucide-react';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
 import { onAuthStateChanged, type User, signOut, updateProfile } from "firebase/auth";
-import { auth, rtdb } from '@/lib/firebase'; // auth and rtdb
-import { ref as databaseRefRtdb, set as setRtdb, get as getRtdb, onValue } from 'firebase/database'; // Aliased RTDB functions
+import { auth, rtdb, app as firebaseApp } from '@/lib/firebase';
+import { ref as databaseRefRtdb, set as setRtdb, get as getRtdb, onValue, push, remove as removeRtdb } from 'firebase/database';
+import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { AdminUploadedFile } from '@/app/admin/uploads/page'; // Import the type
+import type { AdminUploadedFile } from '@/app/admin/uploads/page';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 
 export interface UserProfileData {
   name: string;
@@ -28,7 +32,18 @@ export interface UserProfileData {
   isDealer?: boolean;
 }
 
+export interface UserUploadedFile {
+  id: string;
+  fileName: string;
+  downloadURL: string;
+  contentType: string;
+  size: number;
+  uploadedAt: string; // ISO string
+  uploaderUid: string;
+}
+
 const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
+const USER_ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -46,10 +61,17 @@ export default function ProfilePage() {
 
   const [avatarSrc, setAvatarSrc] = useState(userProfile.avatarUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userFileInputRef = useRef<HTMLInputElement>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const [adminUploadedFiles, setAdminUploadedFiles] = useState<AdminUploadedFile[]>([]);
   const [isLoadingAdminFiles, setIsLoadingAdminFiles] = useState(true);
+
+  const [userSpecificFiles, setUserSpecificFiles] = useState<UserUploadedFile[]>([]);
+  const [isLoadingUserFiles, setIsLoadingUserFiles] = useState(true);
+  const [selectedUserFile, setSelectedUserFile] = useState<File | null>(null);
+  const [userUploadProgress, setUserUploadProgress] = useState(0);
+  const [isUserUploading, setIsUserUploading] = useState(false);
 
 
   useEffect(() => {
@@ -83,6 +105,29 @@ export default function ProfilePage() {
           phone: userPhone,
         }));
         setAvatarSrc(newAvatarUrl);
+
+        // Fetch user-specific files
+        const userFilesDbRef = databaseRefRtdb(rtdb, `userFiles/${user.uid}`);
+        const unsubscribeUserFiles = onValue(userFilesDbRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const fileList: UserUploadedFile[] = Object.keys(data).map(key => ({
+              id: key,
+              ...data[key]
+            })).sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+            setUserSpecificFiles(fileList);
+          } else {
+            setUserSpecificFiles([]);
+          }
+          setIsLoadingUserFiles(false);
+        }, (err) => {
+          console.error("Firebase RTDB read error (userFiles):", err);
+          toast({ variant: "destructive", title: "Error", description: "Could not load your personal files." });
+          setIsLoadingUserFiles(false);
+        });
+        // Store unsubscribe function to call it in cleanup
+        (unsubscribeAuth as any)._unsubscribeUserFiles = unsubscribeUserFiles;
+
       } else {
         setCurrentUser(null);
         setUserProfile({
@@ -94,14 +139,14 @@ export default function ProfilePage() {
             isDealer: false,
         });
         setAvatarSrc(DEFAULT_AVATAR_URL);
-        // No redirect here, allow anonymous users to see shared files
+        setUserSpecificFiles([]);
+        setIsLoadingUserFiles(false);
       }
       setIsLoading(false);
     });
 
-    // Fetch admin uploaded files
     const filesDbRef = databaseRefRtdb(rtdb, 'adminUploadedFiles');
-    const unsubscribeFiles = onValue(filesDbRef, (snapshot) => {
+    const unsubscribeAdminFiles = onValue(filesDbRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const fileList: AdminUploadedFile[] = Object.keys(data).map(key => ({
@@ -115,14 +160,17 @@ export default function ProfilePage() {
       setIsLoadingAdminFiles(false);
     }, (err) => {
       console.error("Firebase RTDB read error (adminUploadedFiles for profile):", err);
-      toast({ variant: "destructive", title: "Error", description: "Could not load shared files." });
+      // toast({ variant: "destructive", title: "Error", description: "Could not load shared files." }); // Be less noisy if it's a secondary feature
       setIsLoadingAdminFiles(false);
     });
 
 
     return () => {
+      if ((unsubscribeAuth as any)._unsubscribeUserFiles) {
+        (unsubscribeAuth as any)._unsubscribeUserFiles();
+      }
       unsubscribeAuth();
-      unsubscribeFiles();
+      unsubscribeAdminFiles();
     };
   }, [router, toast]);
 
@@ -183,6 +231,93 @@ export default function ProfilePage() {
     }
   };
 
+  const handleUserFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedUserFile(e.target.files[0]);
+      setUserUploadProgress(0);
+    } else {
+      setSelectedUserFile(null);
+    }
+  };
+
+  const handleUserFileUpload = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedUserFile || !currentUser) {
+      toast({ variant: "destructive", title: "Error", description: "Please select a file and ensure you are logged in." });
+      return;
+    }
+
+    setIsUserUploading(true);
+    setUserUploadProgress(0);
+
+    const storage = getStorage(firebaseApp); // Default bucket, rules will direct
+    const filePath = `userUploads/${currentUser.uid}/${new Date().getTime()}-${selectedUserFile.name}`;
+    const fileStorageRef = storageRefStandard(storage, filePath);
+
+    const metadata = { contentType: selectedUserFile.type || 'application/octet-stream' };
+    const uploadTask = uploadBytesResumable(fileStorageRef, selectedUserFile, metadata);
+
+    uploadTask.on('state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUserUploadProgress(progress);
+      },
+      (error) => {
+        console.error("User file upload error:", error);
+        toast({ variant: "destructive", title: "Upload Failed", description: `Could not upload file: ${error.message}. Check Storage rules.` });
+        setIsUserUploading(false);
+      },
+      async () => {
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const newFileRef = push(databaseRefRtdb(rtdb, `userFiles/${currentUser.uid}`));
+          
+          const fileData: Omit<UserUploadedFile, 'id'> = {
+            fileName: selectedUserFile.name,
+            downloadURL,
+            contentType: selectedUserFile.type,
+            size: selectedUserFile.size,
+            uploadedAt: new Date().toISOString(),
+            uploaderUid: currentUser.uid,
+          };
+          await setRtdb(newFileRef, fileData);
+          toast({ title: "File Uploaded", description: `${selectedUserFile.name} saved.` });
+          setSelectedUserFile(null);
+          if (userFileInputRef.current) userFileInputRef.current.value = '';
+        } catch (dbError) {
+            console.error("Error saving user file metadata to RTDB:", dbError);
+            toast({ variant: "destructive", title: "Database Error", description: "File uploaded, but failed to save metadata." });
+        } finally {
+            setIsUserUploading(false);
+            setUserUploadProgress(0);
+        }
+      }
+    );
+  };
+
+  const handleDeleteUserFile = async (file: UserUploadedFile) => {
+     if (!currentUser || currentUser.uid !== file.uploaderUid) {
+      toast({ variant: "destructive", title: "Unauthorized", description: "You can only delete your own files." });
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete "${file.fileName}"?`)) return;
+
+    try {
+      const storage = getStorage(firebaseApp);
+      // Derive path from download URL (simplified, assumes default Firebase Storage URL structure)
+      const url = new URL(file.downloadURL);
+      const storagePath = decodeURIComponent(url.pathname.split('/o/')[1].split('?')[0]);
+      
+      const fileToDeleteStorageRef = storageRefStandard(storage, storagePath);
+      await deleteObject(fileToDeleteStorageRef);
+      await removeRtdb(databaseRefRtdb(rtdb, `userFiles/${currentUser.uid}/${file.id}`));
+      toast({ title: "File Deleted", description: `${file.fileName} has been removed.` });
+    } catch (error: any) {
+      console.error("Error deleting user file:", error);
+      toast({ variant: "destructive", title: "Deletion Failed", description: `Could not delete file: ${error.message}` });
+    }
+  };
+
   useEffect(() => {
     const currentSrc = avatarSrc;
     return () => {
@@ -194,10 +329,18 @@ export default function ProfilePage() {
 
   const getFileIcon = (contentType: string) => {
     if (contentType.startsWith('image/')) return <ImageIcon className="h-6 w-6 text-accent" />;
-    if (contentType === 'application/pdf') return <FileText className="h-6 w-6 text-primary" />; // PDF icon
-    return <FileWarning className="h-6 w-6 text-muted-foreground" />; // Generic file icon
+    if (contentType === 'application/pdf') return <FileText className="h-6 w-6 text-primary" />;
+    return <FileWarning className="h-6 w-6 text-muted-foreground" />;
   };
   
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   let avatarHint = "profile avatar";
   if (!avatarSrc || avatarSrc === DEFAULT_AVATAR_URL) {
       avatarHint = "avatar placeholder";
@@ -220,10 +363,10 @@ export default function ProfilePage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-              {currentUser ? "My Profile" : "Shared Files"}
+              {currentUser ? "My Profile" : "Shared Resources"}
             </h1>
             <p className="text-lg text-muted-foreground">
-              {currentUser ? "Manage your account details and view your activity." : "Access files shared by the admin."}
+              {currentUser ? "Manage your account details and personal files." : "Access files shared by the admin."}
             </p>
           </div>
           {currentUser && (
@@ -277,63 +420,120 @@ export default function ProfilePage() {
                   </Button>
             </CardContent>
           </Card>
-           {/* Admin uploaded files shown in the second column if user is logged in */}
-           <Card className="lg:col-span-2 bg-card border-border">
-             <CardHeader>
-                <CardTitle className="text-xl">Shared Documents</CardTitle>
-                <CardDescription>
-                    Files uploaded by the admin team.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingAdminFiles ? (
-                <div className="flex justify-center items-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : adminUploadedFiles.length > 0 ? (
-                <ul className="space-y-4">
-                  {adminUploadedFiles.map((file) => (
-                    <li key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border hover:border-primary/50 transition-colors">
+          
+          <div className="lg:col-span-2 space-y-8">
+            {/* User's Personal File Upload Section */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2"><UploadCloud className="text-primary"/>My Files</CardTitle>
+                <CardDescription>Upload and manage your personal documents (PDFs, images).</CardDescription>
+              </CardHeader>
+              <form onSubmit={handleUserFileUpload}>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="user-file-upload-input" className="text-foreground">Choose File to Upload</Label>
+                    <Input
+                      id="user-file-upload-input"
+                      ref={userFileInputRef}
+                      type="file"
+                      onChange={handleUserFileSelect}
+                      accept={USER_ACCEPTED_FILE_TYPES}
+                      className="bg-input border-input focus:border-primary"
+                      disabled={isUserUploading}
+                    />
+                    {selectedUserFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedUserFile.name} ({formatFileSize(selectedUserFile.size)})</p>}
+                  </div>
+                  {isUserUploading && (
+                    <div className="space-y-1">
+                      <Progress value={userUploadProgress} className="w-full" />
+                      <p className="text-xs text-muted-foreground text-center">{Math.round(userUploadProgress)}%</p>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isUserUploading || !selectedUserFile}>
+                    {isUserUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isUserUploading ? 'Uploading...' : 'Upload My File'}
+                  </Button>
+                </CardFooter>
+              </form>
+              {isLoadingUserFiles ? (
+                <div className="flex justify-center items-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : userSpecificFiles.length > 0 ? (
+                <div className="p-6 pt-2 space-y-3 max-h-96 overflow-y-auto">
+                  {userSpecificFiles.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border hover:border-primary/50 transition-colors">
                       <div className="flex items-center gap-3">
                         {getFileIcon(file.contentType)}
                         <div>
-                          <p className="font-medium text-foreground truncate max-w-xs sm:max-w-sm md:max-w-md" title={file.fileName}>{file.fileName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            { (file.size / (1024 * 1024)).toFixed(2) } MB - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}
-                          </p>
+                          <p className="font-medium text-foreground truncate max-w-[200px] sm:max-w-xs" title={file.fileName}>{file.fileName}</p>
+                          <p className="text-xs text-muted-foreground">{formatFileSize(file.size)} - {new Date(file.uploadedAt).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <Button asChild variant="ghost" size="icon" aria-label={`Download ${file.fileName}`}>
-                        <a href={file.downloadURL} target="_blank" rel="noopener noreferrer" download={file.fileName}>
-                            <Download className="h-5 w-5 text-accent hover:text-accent/80" />
-                        </a>
-                      </Button>
-                    </li>
+                      <div className="space-x-1">
+                        <Button asChild variant="ghost" size="icon" aria-label={`Download ${file.fileName}`}>
+                          <a href={file.downloadURL} target="_blank" rel="noopener noreferrer" download={file.fileName}>
+                            <Download className="h-4 w-4 text-accent hover:text-accent/80" />
+                          </a>
+                        </Button>
+                         <Button variant="ghost" size="icon" aria-label={`Delete ${file.fileName}`} onClick={() => handleDeleteUserFile(file)}>
+                            <Trash2 className="h-4 w-4 text-destructive hover:text-destructive/80" />
+                         </Button>
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : (
-                <p className="text-muted-foreground text-center py-6">
-                  No files have been shared by the admin yet.
-                </p>
+                <p className="text-muted-foreground text-center py-6 px-6">You haven't uploaded any files yet.</p>
               )}
-            </CardContent>
-          </Card>
+            </Card>
+
+            {/* Admin shared files shown below user files if logged in */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                  <CardTitle className="text-xl">Shared Documents from Admin</CardTitle>
+                  <CardDescription>Files uploaded by the admin team.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingAdminFiles ? (
+                  <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                ) : adminUploadedFiles.length > 0 ? (
+                  <ul className="space-y-4  max-h-96 overflow-y-auto">
+                    {adminUploadedFiles.map((file) => (
+                      <li key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border hover:border-primary/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          {getFileIcon(file.contentType)}
+                          <div>
+                            <p className="font-medium text-foreground truncate max-w-xs sm:max-w-sm md:max-w-md" title={file.fileName}>{file.fileName}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(file.size)} - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <Button asChild variant="ghost" size="icon" aria-label={`Download ${file.fileName}`}>
+                          <a href={file.downloadURL} target="_blank" rel="noopener noreferrer" download={file.fileName}>
+                              <Download className="h-5 w-5 text-accent hover:text-accent/80" />
+                          </a>
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground text-center py-6">No files have been shared by the admin yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
         )}
 
-        {!currentUser && ( // Display shared files full-width for anonymous users
+        {!currentUser && ( 
             <Card className="bg-card border-border">
                 <CardHeader>
-                    <CardTitle className="text-xl">Shared Documents</CardTitle>
-                    <CardDescription>
-                        Files uploaded by the admin team.
-                    </CardDescription>
+                    <CardTitle className="text-xl">Shared Documents from Admin</CardTitle>
+                    <CardDescription>Files uploaded by the admin team. Login to upload your own files.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingAdminFiles ? (
-                    <div className="flex justify-center items-center py-10">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
+                    <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                   ) : adminUploadedFiles.length > 0 ? (
                     <ul className="space-y-4">
                       {adminUploadedFiles.map((file) => (
@@ -342,9 +542,7 @@ export default function ProfilePage() {
                             {getFileIcon(file.contentType)}
                             <div>
                               <p className="font-medium text-foreground truncate max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl" title={file.fileName}>{file.fileName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                { (file.size / (1024 * 1024)).toFixed(2) } MB - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}
-                              </p>
+                              <p className="text-xs text-muted-foreground">{formatFileSize(file.size)} - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}</p>
                             </div>
                           </div>
                           <Button asChild variant="ghost" size="icon" aria-label={`Download ${file.fileName}`}>
@@ -356,9 +554,7 @@ export default function ProfilePage() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-muted-foreground text-center py-6">
-                      No files have been shared by the admin yet.
-                    </p>
+                    <p className="text-muted-foreground text-center py-6">No files have been shared by the admin yet.</p>
                   )}
                 </CardContent>
             </Card>
@@ -388,3 +584,6 @@ export default function ProfilePage() {
     </MainAppLayout>
   );
 }
+
+
+    
