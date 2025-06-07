@@ -10,59 +10,12 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { rtdb } from '@/lib/firebase';
 import { ref, get, child, query, limitToFirst, orderByChild, equalTo } from 'firebase/database';
 import { ProductCard } from '@/components/shop/ProductCard';
-import ProductDisplayPricing from './ProductDisplayPricing'; // Import the client component
+import ProductDisplayPricing from './ProductDisplayPricing';
 
 const PLACEHOLDER_IMAGE_URL_600 = 'https://placehold.co/600x600.png';
 const PLACEHOLDER_IMAGE_URL_400 = 'https://placehold.co/400x400.png';
 
-
-async function getProductFromDB(id: string): Promise<ProductType | undefined> {
-  try {
-    const productRef = child(ref(rtdb, 'products'), id);
-    const snapshot = await get(productRef);
-    if (snapshot.exists()) {
-      return { id: snapshot.key as string, ...snapshot.val() } as ProductType;
-    }
-    console.log(`Product Details: Product with ID ${id} not found in DB.`);
-    return undefined;
-  } catch (error) {
-    console.error(`Product Details: RTDB Error in getProductFromDB for ID ${id}:`, error);
-    return undefined;
-  }
-}
-
-async function getRelatedProducts(currentProduct: ProductType): Promise<ProductType[]> {
-  if (!currentProduct.category) return [];
-  try {
-    const productsRef = ref(rtdb, 'products');
-    const categoryQuery = query(
-      productsRef,
-      orderByChild('category'),
-      equalTo(currentProduct.category),
-      limitToFirst(5)
-    );
-    const snapshot = await get(categoryQuery);
-    if (snapshot.exists()) {
-      const productList: ProductType[] = [];
-      snapshot.forEach(childSnapshot => {
-        if (childSnapshot.key !== currentProduct.id) {
-          productList.push({ id: childSnapshot.key!, ...childSnapshot.val() });
-        }
-      });
-      return productList.slice(0, 4);
-    }
-    return [];
-  } catch (error: any) {
-    if (error instanceof Error) {
-      console.error(`Error fetching related products for category ${currentProduct.category}:`, error.message);
-    } else {
-      console.error(`An unknown error occurred while fetching related products for category ${currentProduct.category}:`, error);
-    }
-    return [];
-  }
-}
-
-
+// Fetches all product IDs from RTDB for static generation
 export async function generateStaticParams() {
   try {
     const productsRef = ref(rtdb, 'products');
@@ -76,7 +29,51 @@ export async function generateStaticParams() {
     return [];
   } catch (error) {
     console.error("Error fetching product IDs for generateStaticParams (product details):", error);
+    // Do not throw here for build stability; return empty array instead.
     return [];
+  }
+}
+
+// Fetches a single product from RTDB
+async function getProductFromDB(id: string): Promise<ProductType | undefined> {
+  try {
+    const productRef = child(ref(rtdb, 'products'), id);
+    const snapshot = await get(productRef);
+    if (snapshot.exists()) {
+      return { id: snapshot.key as string, ...snapshot.val() } as ProductType;
+    }
+    console.log(`Product Details: Product with ID ${id} not found in DB.`);
+    return undefined;
+  } catch (error) {
+    console.error(`Product Details: RTDB Error in getProductFromDB for ID ${id}:`, error);
+    throw error; // Re-throw the error to be caught by the page component
+  }
+}
+
+async function getRelatedProducts(currentProduct: ProductType): Promise<ProductType[]> {
+  if (!currentProduct.category) return [];
+  try {
+    const productsRef = ref(rtdb, 'products');
+    const categoryQuery = query(
+      productsRef,
+      orderByChild('category'),
+      equalTo(currentProduct.category),
+      limitToFirst(5) // Fetch 5 to ensure we have 4 even if currentProduct is among them
+    );
+    const snapshot = await get(categoryQuery);
+    if (snapshot.exists()) {
+      const productList: ProductType[] = [];
+      snapshot.forEach(childSnapshot => {
+        if (childSnapshot.key !== currentProduct.id) { // Exclude the current product
+          productList.push({ id: childSnapshot.key!, ...childSnapshot.val() });
+        }
+      });
+      return productList.slice(0, 4); // Ensure only up to 4 related products
+    }
+    return [];
+  } catch (error: any) {
+    console.error(`Error fetching related products for category ${currentProduct.category}:`, error);
+    throw error; // Re-throw the error
   }
 }
 
@@ -212,5 +209,3 @@ export default async function ProductDetailsPage({
     </MainAppLayout>
   );
 }
-
-    
