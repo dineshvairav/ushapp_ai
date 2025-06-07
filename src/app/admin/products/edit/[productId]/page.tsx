@@ -29,7 +29,7 @@ export async function generateStaticParams() {
 }
 
 interface EditProductServerPageProps {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
 }
 
 // Fetches a single product from RTDB
@@ -48,7 +48,7 @@ async function getProductFromDB(productId: string): Promise<Product | undefined>
 }
 
 export default async function EditProductServerPage({ params }: EditProductServerPageProps) {
-  const { productId } = params;
+  const { productId } = await params;
   
   // Fetch product from RTDB
   const product = await getProductFromDB(productId);
