@@ -39,7 +39,7 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
       productsRef,
       orderByChild('category'),
       equalTo(currentProduct.category),
-      limitToFirst(5) 
+      limitToFirst(5)
     );
     const snapshot = await get(categoryQuery);
     if (snapshot.exists()) {
@@ -49,16 +49,16 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
           productList.push({ id: childSnapshot.key!, ...childSnapshot.val() });
         }
       });
-      return productList.slice(0, 4); 
+      return productList.slice(0, 4);
     }
     return [];
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof Error) {
       console.error(`Error fetching related products for category ${currentProduct.category}:`, error.message);
     } else {
       console.error(`An unknown error occurred while fetching related products for category ${currentProduct.category}:`, error);
     }
-    return []; 
+    return [];
   }
 }
 
@@ -76,15 +76,16 @@ export async function generateStaticParams() {
     return [];
   } catch (error) {
     console.error("Error fetching product IDs for generateStaticParams (product details):", error);
-    return []; 
+    return [];
   }
 }
 
-interface ProductDetailsPageProps {
-  params: { id: string; };
-}
-
-export default async function ProductDetailsPage({ params }: ProductDetailsPageProps) {
+// Explicitly type the props for the page component
+export default async function ProductDetailsPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const { id } = params;
   let product: ProductType | undefined;
   let relatedProducts: ProductType[] = [];
@@ -95,8 +96,8 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
     if (product) {
       relatedProducts = await getRelatedProducts(product);
     }
-  } catch (error: any) { // Catch any error during data fetching
-    console.error(`Failed to fetch product details or related products for ${id}:`, error);
+  } catch (error: any) {
+    console.error(`Failed to fetch product details or related products for ${id} in Page:`, error);
     fetchError = error.message || "An unknown error occurred fetching product data.";
   }
 
@@ -108,8 +109,8 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
           <PackageOpen className="mx-auto h-16 w-16 text-destructive mb-4" />
           <h1 className="text-2xl font-semibold text-foreground">Product Not Found or Error</h1>
           <p className="text-muted-foreground mb-6">
-             {fetchError 
-              ? `Error: ${fetchError}` 
+             {fetchError
+              ? `Error: ${fetchError}`
               : `The product with ID "${id}" could not be found.`}
           </p>
           <Link href="/shop">
@@ -138,7 +139,7 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
               {product.images && product.images.length > 0 ? (
                 product.images.map((img, index) => {
                   const imageSrc = img.src || PLACEHOLDER_IMAGE_URL_600;
-                  let imageHint = "product photo"; 
+                  let imageHint = "product photo";
                   if (!img.src || img.src === PLACEHOLDER_IMAGE_URL_600 || img.src === PLACEHOLDER_IMAGE_URL_400) {
                     imageHint = "placeholder image";
                   } else if (img.hint) {
@@ -180,7 +181,7 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
         <ProductDisplayPricing product={product} />
 
       </div>
-      
+
       {product.details && Object.keys(product.details).length > 0 && (
         <div className="mt-8 pt-6 border-t border-border">
           <h3 className="text-xl font-semibold text-foreground mb-4">Product Details</h3>
@@ -194,7 +195,7 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
           </ul>
         </div>
       )}
-      
+
       {relatedProducts.length > 0 && (
         <>
           <Separator className="my-12" />
@@ -211,3 +212,5 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
     </MainAppLayout>
   );
 }
+
+    
