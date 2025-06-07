@@ -11,16 +11,16 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, UploadCloud, FileIcon, Trash2, Loader2, AlertTriangle, Download } from 'lucide-react';
-import { auth, rtdb, app as firebaseApp } from '@/lib/firebase'; // Imported firebaseApp
-import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"; // Renamed storageRef to avoid conflict
-import { ref as databaseRef, onValue, push, set, remove } from 'firebase/database'; // serverTimestamp was unused
+import { ArrowLeft, UploadCloud, FileIcon, Trash2, Loader2, AlertTriangle, Download, Copy } from 'lucide-react'; // Added Copy icon
+import { auth, rtdb, app as firebaseApp } from '@/lib/firebase';
+import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref as databaseRef, onValue, push, set, remove } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 
 const ADMIN_EMAIL = 'dineshvairav@gmail.com';
 const ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
-const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app"; // Bucket specified by user
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app";
 
 export interface AdminUploadedFile {
   id: string;
@@ -112,7 +112,7 @@ export default function FileUploadPage() {
     setIsUploading(true);
     setUploadProgress(0);
 
-    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Explicitly use the app and bucket URI
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
     const filePath = `adminUploads/${new Date().getTime()}-${selectedFile.name}`;
     const fileStorageRef = storageRefStandard(storage, filePath);
 
@@ -120,7 +120,7 @@ export default function FileUploadPage() {
     console.log('Target Storage Path:', fileStorageRef.toString());
 
     const metadata = {
-      contentType: selectedFile.type || 'application/octet-stream' // Fallback contentType
+      contentType: selectedFile.type || 'application/octet-stream'
     };
 
     const uploadTask = uploadBytesResumable(fileStorageRef, selectedFile, metadata);
@@ -179,18 +179,13 @@ export default function FileUploadPage() {
     }
 
     try {
-      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Use specific bucket
-      // Construct the GCS path from the download URL. This is a bit fragile.
-      // A more robust way is to store the full GCS path in RTDB if possible.
-      // Example: gs://<bucket_name>/adminUploads/timestamp-filename.pdf
-      // For now, we try to derive it from downloadURL, which works for default Firebase Storage URLs.
+      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
       let storagePath = '';
       try {
         const url = new URL(file.downloadURL);
-        // Pathname for Firebase Storage download URLs is usually /v0/b/<bucket>/o/<path_to_file>
         const pathSegments = url.pathname.split('/o/');
         if (pathSegments.length > 1) {
-          storagePath = decodeURIComponent(pathSegments[1]);
+          storagePath = decodeURIComponent(pathSegments[1].split('?')[0]); // Also remove query params like ?alt=media&token=...
         } else {
           throw new Error("Cannot determine storage path from download URL for deletion.");
         }
@@ -212,11 +207,10 @@ export default function FileUploadPage() {
       let detailedErrorMessage = `Could not delete ${file.fileName}.`;
       if (error.code === 'storage/object-not-found') {
           detailedErrorMessage += " The file was not found in storage (it might have been already deleted). Proceeding to remove from list.";
-          // If storage deletion fails because it's not found, still try to remove from RTDB.
           try {
             await remove(databaseRef(rtdb, `adminUploadedFiles/${file.id}`));
             toast({ title: "File Removed from List", description: `${file.fileName} was not found in storage but removed from database list.` });
-            return; // Exit early as RTDB removal was attempted
+            return;
           } catch (rtdbDeleteError) {
             console.error("Error removing file from RTDB after storage/object-not-found:", rtdbDeleteError);
             detailedErrorMessage += " Also failed to remove from database list.";
@@ -226,6 +220,17 @@ export default function FileUploadPage() {
       }
       toast({ variant: "destructive", title: "Deletion Failed", description: detailedErrorMessage, duration: 7000 });
     }
+  };
+
+  const handleCopyLink = (downloadURL: string) => {
+    navigator.clipboard.writeText(downloadURL)
+      .then(() => {
+        toast({ title: "Link Copied", description: "Download link copied to clipboard." });
+      })
+      .catch(err => {
+        console.error("Failed to copy link: ", err);
+        toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy link to clipboard." });
+      });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -290,8 +295,8 @@ export default function FileUploadPage() {
         <CardContent className="text-sm text-destructive/80 space-y-1 pl-12">
             <p>Uploaded files are stored in Firebase Storage (Bucket: <strong>{TARGET_STORAGE_BUCKET}</strong>) and metadata in Realtime Database. Ensure your Firebase Security Rules are configured appropriately:</p>
             <ul className="list-disc list-inside pl-4">
-                <li><strong>Storage Rules:</strong> Restrict write access to the `adminUploads/` path to authenticated admins. Configure read access as needed.</li>
-                <li><strong>RTDB Rules:</strong> Restrict write access to `adminUploadedFiles` path to admins. Configure read access for users.</li>
+                <li><strong>Storage Rules:</strong> Restrict write access to the `adminUploads/` path to authenticated admins. Configure read access as needed (currently public).</li>
+                <li><strong>RTDB Rules:</strong> Restrict write access to `adminUploadedFiles` path to admins. Configure read access for users (currently public).</li>
             </ul>
             <p className="mt-2">This page uses client-side admin checks. For production, robust server-side validation and custom claims are recommended for admin access.</p>
         </CardContent>
@@ -377,7 +382,7 @@ export default function FileUploadPage() {
                         <TableRow key={file.id} className="hover:bg-muted/10">
                           <TableCell className="font-medium text-foreground truncate max-w-xs" title={file.fileName}>{file.fileName}</TableCell>
                           <TableCell className="text-muted-foreground">{file.contentType}</TableCell>
-                          <TableCell className="text-muted-foreground">{formatFileSize(file.size)}</TableCell>
+                          <TableCell className="text-muted-foreground">{formatFileSize(file.size}</TableCell>
                           <TableCell className="text-muted-foreground">{new Date(file.uploadedAt).toLocaleDateString()}</TableCell>
                           <TableCell className="text-center space-x-1">
                             <Button
@@ -387,6 +392,14 @@ export default function FileUploadPage() {
                               title="Download/View File"
                             >
                               <Download className="h-4 w-4 text-accent" />
+                            </Button>
+                             <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleCopyLink(file.downloadURL)}
+                              title="Copy Download Link"
+                            >
+                              <Copy className="h-4 w-4 text-blue-500" />
                             </Button>
                             <Button
                               variant="outline"
