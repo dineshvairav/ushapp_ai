@@ -95,10 +95,11 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
     if (product) {
       relatedProducts = await getRelatedProducts(product);
     }
-  } catch (error) {
+  } catch (error: any) { // Catch any error during data fetching
     console.error(`Failed to fetch product details or related products for ${id}:`, error);
-    fetchError = error instanceof Error ? error.message : "An unknown error occurred fetching product data.";
+    fetchError = error.message || "An unknown error occurred fetching product data.";
   }
+
 
   if (fetchError || !product) {
     return (
