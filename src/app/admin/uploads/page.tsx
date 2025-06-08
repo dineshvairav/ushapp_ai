@@ -309,10 +309,6 @@ export default function FileUploadPage() {
   if (isAdminLoading) {
     return <MainAppLayout><div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div></MainAppLayout>;
   }
-  // Simplified check for initial rendering, relies on admin to be logged in for actions
-  // if (!isAuthorized) { 
-  //   return <MainAppLayout><div className="text-center py-10">Access Denied. You must be an admin.</div></MainAppLayout>;
-  // }
 
   return (
     <MainAppLayout>
@@ -344,7 +340,7 @@ export default function FileUploadPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <Card className="lg:col-span-1 border-border shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl text-primary flex items-center gap-2"><UserCheck className="h-6 w-6" /> Upload File for Guest</CardTitle>
@@ -470,19 +466,15 @@ export default function FileUploadPage() {
                         <TableCell className="text-center space-x-1">
                           <Button variant="outline" size="icon" onClick={() => window.open(file.downloadURL, '_blank')} title="Download/View File"><Download className="h-4 w-4 text-accent" /></Button>
                           <Button variant="outline" size="icon" onClick={() => handleCopyLink(file.downloadURL)} title="Copy Download Link"><Copy className="h-4 w-4 text-blue-500" /></Button>
-                          {file.fileName === "Sales_2-Jun-25__HO.pdf" ? (
-                            <span className="text-xs text-muted-foreground italic px-2 py-1 inline-block align-middle">As admin I cannot delete this uploaded pdf</span>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleDeleteFile(file)}
-                              title="not delete this file" // Tooltip as per previous request
-                              disabled={!isAuthorized}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleDeleteFile(file)}
+                            title="not delete this file"
+                            disabled={!isAuthorized}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -499,4 +491,3 @@ export default function FileUploadPage() {
   );
 }
     
-
