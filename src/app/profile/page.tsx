@@ -55,6 +55,7 @@ export interface GuestSpecificSharedFile {
 
 const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
 const USER_ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app"; // Define bucket for user uploads
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -232,22 +233,45 @@ export default function ProfilePage() {
 
   const handleUserFileUpload = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedUserFile || !currentUser) { toast({ variant: "destructive", title: "Error", description: "Please select a file and ensure you are logged in." }); return; }
-    setIsUserUploading(true); setUserUploadProgress(0);
-    const storage = getStorage(firebaseApp);
+    if (!selectedUserFile || !currentUser) { 
+        toast({ variant: "destructive", title: "Error", description: "Please select a file and ensure you are logged in." }); 
+        return; 
+    }
+    setIsUserUploading(true); 
+    setUserUploadProgress(0);
+    console.log(`User File Upload: Starting for user: ${currentUser.uid}, file: ${selectedUserFile.name}, size: ${selectedUserFile.size}, type: ${selectedUserFile.type}`);
+    
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Use explicit bucket
     const filePath = `userUploads/${currentUser.uid}/${new Date().getTime()}-${selectedUserFile.name}`;
-    const uploadTask = uploadBytesResumable(storageRefStandard(storage, filePath), selectedUserFile, { contentType: selectedUserFile.type || 'application/octet-stream' });
-    uploadTask.on('state_changed', (s) => setUserUploadProgress((s.bytesTransferred / s.totalBytes) * 100),
-      (err) => { toast({ variant: "destructive", title: "Upload Failed", description: err.message }); setIsUserUploading(false); },
+    const fileStorageRef = storageRefStandard(storage, filePath);
+    console.log("User File Upload: Attempting to upload to storage path:", fileStorageRef.toString());
+
+    const uploadTask = uploadBytesResumable(fileStorageRef, selectedUserFile, { contentType: selectedUserFile.type || 'application/octet-stream' });
+    
+    uploadTask.on('state_changed', 
+      (snapshot) => setUserUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+      (error) => { 
+        console.error("User File Upload Error:", error);
+        toast({ variant: "destructive", title: "Upload Failed", description: `Error: ${error.code} - ${error.message}. Check console and Storage Rules for 'userUploads/${currentUser.uid}/'.`, duration: 7000 }); 
+        setIsUserUploading(false); 
+      },
       async () => {
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const fileData: Omit<UserUploadedFile, 'id'> = { fileName: selectedUserFile.name, downloadURL, contentType: selectedUserFile.type, size: selectedUserFile.size, uploadedAt: new Date().toISOString(), uploaderUid: currentUser.uid };
+          console.log("User File Upload: File uploaded successfully. Download URL:", downloadURL);
+          const fileData: Omit<UserUploadedFile, 'id'> = { fileName: selectedUserFile.name, downloadURL, contentType: selectedUserFile.type || 'unknown', size: selectedUserFile.size, uploadedAt: new Date().toISOString(), uploaderUid: currentUser.uid };
           await setRtdb(push(databaseRefRtdb(rtdb, `userFiles/${currentUser.uid}`)), fileData);
+          console.log("User File Upload: File metadata saved to RTDB:", fileData);
           toast({ title: "File Uploaded", description: `${selectedUserFile.name} saved.` });
-          setSelectedUserFile(null); if (userFileInputRef.current) userFileInputRef.current.value = '';
-        } catch (dbErr) { toast({ variant: "destructive", title: "Database Error", description: "File uploaded, but failed to save metadata." });
-        } finally { setIsUserUploading(false); setUserUploadProgress(0); }
+          setSelectedUserFile(null); 
+          if (userFileInputRef.current) userFileInputRef.current.value = '';
+        } catch (dbError: any) { 
+            console.error("User File Upload: Error saving metadata to RTDB:", dbError);
+            toast({ variant: "destructive", title: "Database Error", description: "File uploaded, but failed to save metadata. " + dbError.message });
+        } finally { 
+            setIsUserUploading(false); 
+            setUserUploadProgress(0); 
+        }
       });
   };
 
@@ -255,13 +279,25 @@ export default function ProfilePage() {
      if (!currentUser || currentUser.uid !== file.uploaderUid) { toast({ variant: "destructive", title: "Unauthorized" }); return; }
      if (!window.confirm(`Delete "${file.fileName}"?`)) return;
     try {
-      const storage = getStorage(firebaseApp);
+      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Use explicit bucket
       const url = new URL(file.downloadURL);
-      const storagePath = decodeURIComponent(url.pathname.split('/o/')[1].split('?')[0]);
+      // Ensure the path correctly extracts from a Firebase Storage URL
+      // e.g., https://firebasestorage.googleapis.com/v0/b/YOUR_BUCKET_ID/o/userUploads%2FUSER_ID%2FFILENAME?alt=media...
+      // The path to delete is after "/o/" and before "?alt=media"
+      const pathSegments = url.pathname.split('/o/');
+      if (pathSegments.length <=1) throw new Error("Cannot determine storage path from download URL.");
+      const encodedPath = pathSegments[1].split('?')[0]; // Get the URL encoded path part
+      if(!encodedPath) throw new Error("Storage path for deletion is empty or malformed.");
+      const storagePath = decodeURIComponent(encodedPath); // Decode it
+
+      console.log("User File Delete: Attempting to delete from storage path:", storagePath);
       await deleteObject(storageRefStandard(storage, storagePath));
       await removeRtdb(databaseRefRtdb(rtdb, `userFiles/${currentUser.uid}/${file.id}`));
       toast({ title: "File Deleted", description: `${file.fileName} removed.` });
-    } catch (error: any) { toast({ variant: "destructive", title: "Deletion Failed", description: error.message }); }
+    } catch (error: any) { 
+      console.error("User File Delete Error:", error);
+      toast({ variant: "destructive", title: "Deletion Failed", description: `${error.message || `Could not delete ${file.fileName}`}. Check console and Storage rules.` }); 
+    }
   };
 
   useEffect(() => { const currentSrc = avatarSrc; return () => { if (currentSrc?.startsWith('blob:')) URL.revokeObjectURL(currentSrc); }; }, [avatarSrc]);
@@ -404,3 +440,4 @@ export default function ProfilePage() {
     </MainAppLayout>
   );
 }
+
