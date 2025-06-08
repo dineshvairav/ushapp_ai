@@ -17,7 +17,7 @@ import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloa
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { AdminUploadedFile, GuestSharedFile as AdminGuestSharedFile } from '@/app/admin/uploads/page'; // GuestSharedFile from admin page context
+import type { AdminUploadedFile } from '@/app/admin/uploads/page';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -55,7 +55,7 @@ export interface GuestSpecificSharedFile {
 
 const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
 const USER_ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
-const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app"; // Define bucket for user uploads
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app"; 
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -97,7 +97,7 @@ export default function ProfilePage() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) { // Authenticated user
         setCurrentUser(user);
-        localStorage.removeItem('guestPhoneNumber'); // Clear guest phone if user logs in
+        localStorage.removeItem('guestPhoneNumber'); 
         setGuestAccessedPhoneNumber(null);
         setGuestSpecificSharedFiles([]);
 
@@ -124,7 +124,6 @@ export default function ProfilePage() {
         });
         setAvatarSrc(newAvatarUrl);
 
-        // Fetch user's own uploaded files
         setIsLoadingUserFiles(true);
         const userFilesDbRef = databaseRefRtdb(rtdb, `userFiles/${user.uid}`);
         const unsubscribeUserFiles = onValue(userFilesDbRef, (snapshot) => {
@@ -137,7 +136,7 @@ export default function ProfilePage() {
         });
         (unsubscribeAuth as any)._unsubscribeUserFiles = unsubscribeUserFiles;
 
-      } else { // Guest user (not logged in via Firebase Auth)
+      } else { 
         setCurrentUser(null);
         const storedGuestPhone = localStorage.getItem('guestPhoneNumber');
         setGuestAccessedPhoneNumber(storedGuestPhone);
@@ -166,14 +165,12 @@ export default function ProfilePage() {
       setIsLoading(false);
     });
 
-    // Fetch globally shared admin files (for all users)
     const adminFilesDbRef = databaseRefRtdb(rtdb, 'adminUploadedFiles');
     const unsubscribeAdminFiles = onValue(adminFilesDbRef, (snapshot) => {
       const data = snapshot.val();
       setAdminUploadedFiles(data ? Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a,b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()) : []);
       setIsLoadingAdminFiles(false);
     }, (err) => {
-      // Minor error, don't be too noisy
       console.error("Could not load shared admin files for profile page:", err);
       setIsLoadingAdminFiles(false);
     });
@@ -217,7 +214,7 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      localStorage.removeItem('guestPhoneNumber'); // Clear guest phone on logout
+      localStorage.removeItem('guestPhoneNumber'); 
       setGuestAccessedPhoneNumber(null);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/onboarding');
@@ -241,7 +238,7 @@ export default function ProfilePage() {
     setUserUploadProgress(0);
     console.log(`User File Upload: Starting for user: ${currentUser.uid}, file: ${selectedUserFile.name}, size: ${selectedUserFile.size}, type: ${selectedUserFile.type}`);
     
-    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Use explicit bucket
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); 
     const filePath = `userUploads/${currentUser.uid}/${new Date().getTime()}-${selectedUserFile.name}`;
     const fileStorageRef = storageRefStandard(storage, filePath);
     console.log("User File Upload: Attempting to upload to storage path:", fileStorageRef.toString());
@@ -251,23 +248,35 @@ export default function ProfilePage() {
     uploadTask.on('state_changed', 
       (snapshot) => setUserUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
       (error) => { 
-        console.error("User File Upload Error:", error);
+        console.error("User File Upload Error (during upload):", error);
         toast({ variant: "destructive", title: "Upload Failed", description: `Error: ${error.code} - ${error.message}. Check console and Storage Rules for 'userUploads/${currentUser.uid}/'.`, duration: 7000 }); 
         setIsUserUploading(false); 
       },
-      async () => {
+      async () => { // On success
+        console.log("User File Upload: File uploaded to storage successfully.");
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          console.log("User File Upload: File uploaded successfully. Download URL:", downloadURL);
-          const fileData: Omit<UserUploadedFile, 'id'> = { fileName: selectedUserFile.name, downloadURL, contentType: selectedUserFile.type || 'unknown', size: selectedUserFile.size, uploadedAt: new Date().toISOString(), uploaderUid: currentUser.uid };
+          console.log("User File Upload: Download URL retrieved:", downloadURL);
+          const fileData: Omit<UserUploadedFile, 'id'> = { 
+            fileName: selectedUserFile.name, 
+            downloadURL, 
+            contentType: selectedUserFile.type || 'unknown', 
+            size: selectedUserFile.size, 
+            uploadedAt: new Date().toISOString(), 
+            uploaderUid: currentUser.uid 
+          };
           await setRtdb(push(databaseRefRtdb(rtdb, `userFiles/${currentUser.uid}`)), fileData);
           console.log("User File Upload: File metadata saved to RTDB:", fileData);
           toast({ title: "File Uploaded", description: `${selectedUserFile.name} saved.` });
           setSelectedUserFile(null); 
           if (userFileInputRef.current) userFileInputRef.current.value = '';
-        } catch (dbError: any) { 
-            console.error("User File Upload: Error saving metadata to RTDB:", dbError);
-            toast({ variant: "destructive", title: "Database Error", description: "File uploaded, but failed to save metadata. " + dbError.message });
+        } catch (postUploadError: any) { 
+            console.error("User File Upload: Error in post-upload process:", postUploadError);
+            if (postUploadError.code && postUploadError.code.startsWith('storage/')) {
+                 toast({ variant: "destructive", title: "Storage Error", description: `File uploaded, but failed to retrieve download link. ${postUploadError.message}`, duration: 7000 });
+            } else {
+                 toast({ variant: "destructive", title: "Database Error", description: `File uploaded and link retrieved, but failed to save metadata to database. ${postUploadError.message}`, duration: 7000 });
+            }
         } finally { 
             setIsUserUploading(false); 
             setUserUploadProgress(0); 
@@ -279,16 +288,13 @@ export default function ProfilePage() {
      if (!currentUser || currentUser.uid !== file.uploaderUid) { toast({ variant: "destructive", title: "Unauthorized" }); return; }
      if (!window.confirm(`Delete "${file.fileName}"?`)) return;
     try {
-      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); // Use explicit bucket
+      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET); 
       const url = new URL(file.downloadURL);
-      // Ensure the path correctly extracts from a Firebase Storage URL
-      // e.g., https://firebasestorage.googleapis.com/v0/b/YOUR_BUCKET_ID/o/userUploads%2FUSER_ID%2FFILENAME?alt=media...
-      // The path to delete is after "/o/" and before "?alt=media"
       const pathSegments = url.pathname.split('/o/');
       if (pathSegments.length <=1) throw new Error("Cannot determine storage path from download URL.");
-      const encodedPath = pathSegments[1].split('?')[0]; // Get the URL encoded path part
+      const encodedPath = pathSegments[1].split('?')[0]; 
       if(!encodedPath) throw new Error("Storage path for deletion is empty or malformed.");
-      const storagePath = decodeURIComponent(encodedPath); // Decode it
+      const storagePath = decodeURIComponent(encodedPath); 
 
       console.log("User File Delete: Attempting to delete from storage path:", storagePath);
       await deleteObject(storageRefStandard(storage, storagePath));
@@ -339,7 +345,6 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Authenticated User Profile Card */}
         {currentUser && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Card className="lg:col-span-1 bg-card border-border">
@@ -365,7 +370,6 @@ export default function ProfilePage() {
           </Card>
           
           <div className="lg:col-span-2 space-y-8">
-            {/* User's Personal File Upload Section */}
             <Card className="bg-card border-border">
               <CardHeader><CardTitle className="text-xl flex items-center gap-2"><UploadCloud className="text-primary"/>My Files</CardTitle><CardDescription>Upload and manage your personal documents.</CardDescription></CardHeader>
               <form onSubmit={handleUserFileUpload}>
@@ -380,7 +384,14 @@ export default function ProfilePage() {
                 : userSpecificFiles.length > 0 ? <div className="p-6 pt-2 space-y-3 max-h-96 overflow-y-auto">{userSpecificFiles.map((file) => (
                     <div key={file.id} className="flex items-center justify-between p-3 rounded-md border hover:border-primary/50">
                       <div className="flex items-center gap-3">{getFileIcon(file.contentType)}<div><p className="font-medium truncate max-w-[200px] sm:max-w-xs" title={file.fileName}>{file.fileName}</p><p className="text-xs text-muted-foreground">{formatFileSize(file.size)} - {new Date(file.uploadedAt).toLocaleDateString()}</p></div></div>
-                      <div className="space-x-1"><Button asChild variant="ghost" size="icon"><a href={file.downloadURL} target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4 text-accent" /></a></Button><Button variant="ghost" size="icon" onClick={() => handleDeleteUserFile(file)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>
+                      <div className="space-x-1">
+                        <Button asChild variant="ghost" size="icon" title="Download file">
+                            <a href={file.downloadURL} target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4 text-accent" /></a>
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteUserFile(file)} title="Delete this file">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>))}</div>
                 : <p className="text-muted-foreground text-center p-6">You haven't uploaded any files yet.</p>}
             </Card>
@@ -388,7 +399,6 @@ export default function ProfilePage() {
         </div>
         )}
 
-        {/* Guest-Specific Shared Files Section */}
         {!currentUser && guestAccessedPhoneNumber && (
           <Card className="bg-card border-border">
             <CardHeader>
@@ -401,14 +411,15 @@ export default function ProfilePage() {
                 <ul className="space-y-4 max-h-96 overflow-y-auto">{guestSpecificSharedFiles.map((file) => (
                   <li key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border hover:border-primary/50">
                     <div className="flex items-center gap-3">{getFileIcon(file.contentType)}<div><p className="font-medium truncate max-w-xs sm:max-w-md" title={file.fileName}>{file.fileName}</p><p className="text-xs text-muted-foreground">{formatFileSize(file.size)} - Shared: {new Date(file.uploadedAt).toLocaleDateString()}</p></div></div>
-                    <Button asChild variant="ghost" size="icon"><a href={file.downloadURL} target="_blank" rel="noopener noreferrer"><Download className="h-5 w-5 text-accent" /></a></Button>
+                    <Button asChild variant="ghost" size="icon" title="Download file">
+                        <a href={file.downloadURL} target="_blank" rel="noopener noreferrer"><Download className="h-5 w-5 text-accent" /></a>
+                    </Button>
                   </li>))}</ul>
               ) : <p className="text-muted-foreground text-center py-6">No documents have been specifically shared with this phone number.</p>}
             </CardContent>
           </Card>
         )}
 
-        {/* Globally Shared Admin Files Section (visible to all) */}
         <Card className="bg-card border-border">
             <CardHeader>
                 <CardTitle className="text-xl">Shared Documents from Admin</CardTitle>
@@ -420,13 +431,14 @@ export default function ProfilePage() {
                 <ul className="space-y-4 max-h-96 overflow-y-auto">{adminUploadedFiles.map((file) => (
                   <li key={file.id} className="flex items-center justify-between p-3 bg-background/50 rounded-md border hover:border-primary/50">
                     <div className="flex items-center gap-3">{getFileIcon(file.contentType)}<div><p className="font-medium truncate max-w-xs sm:max-w-md" title={file.fileName}>{file.fileName}</p><p className="text-xs text-muted-foreground">{formatFileSize(file.size)} - Uploaded: {new Date(file.uploadedAt).toLocaleDateString()}</p></div></div>
-                    <Button asChild variant="ghost" size="icon"><a href={file.downloadURL} target="_blank" rel="noopener noreferrer"><Download className="h-5 w-5 text-accent" /></a></Button>
+                     <Button asChild variant="ghost" size="icon" title="Download file">
+                        <a href={file.downloadURL} target="_blank" rel="noopener noreferrer"><Download className="h-5 w-5 text-accent" /></a>
+                    </Button>
                   </li>))}</ul>
               ) : <p className="text-muted-foreground text-center py-6">No general files have been shared by the admin yet.</p>}
             </CardContent>
         </Card>
 
-        {/* Order History (only for authenticated users) */}
         {currentUser && (
         <Card className="bg-card border-border">
             <CardHeader><CardTitle className="text-xl">Order History</CardTitle><CardDescription>View your past orders and their status.</CardDescription></CardHeader>
