@@ -15,8 +15,7 @@ export function StaticShopLogo({
   alt = "ushªOªpp Logo",
   className
 }: StaticShopLogoProps) {
-  const logoSrc = "/logo.png"; // This will work if public/logo.png exists.
-  // const placeholderSrc = `https://placehold.co/${width}x${height}.png?text=Logo`;
+  const logoSrc = "/logo.png";
 
   return (
     <Image
@@ -26,9 +25,11 @@ export function StaticShopLogo({
       height={height}
       className={cn(
         "rounded-lg",
-        "h-auto", // Add h-auto to maintain aspect ratio if width is styled by CSS
+        // Ensure h-auto or w-auto is applied if only one dimension might be controlled by external CSS
+        // However, since width and height props are passed, this should be managed by next/image
         className
       )}
+      style={{ aspectRatio: `${width}/${height}` }} // Explicitly set aspect ratio
       priority
       data-ai-hint="app logo"
     />
