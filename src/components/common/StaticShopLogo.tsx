@@ -15,7 +15,8 @@ export function StaticShopLogo({
   alt = "ushªOªpp Logo",
   className
 }: StaticShopLogoProps) {
-  const logoSrc = "/logo.png"; // This will work if public/logo.png exists.
+  // This component expects the logo image to be located at `public/logo.png`
+  const logoSrc = "/logo.png";
   // const placeholderSrc = `https://placehold.co/${width}x${height}.png?text=Logo`;
 
   return (
@@ -26,7 +27,7 @@ export function StaticShopLogo({
       height={height}
       className={cn(
         "rounded-lg",
-        "h-auto", // Add h-auto to maintain aspect ratio if width is styled by CSS
+        // "h-auto", // Removed based on previous interaction; width/height props should define aspect.
         className
       )}
       priority
