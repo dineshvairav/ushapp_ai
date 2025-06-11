@@ -16,7 +16,7 @@ export function StaticShopLogo({
   className
 }: StaticShopLogoProps) {
   // This component expects the logo image to be located at `public/logo.png`
-  const logoSrc = "/logo.png";
+  const logoSrc = "./logo.png";
   // const placeholderSrc = `https://placehold.co/${width}x${height}.png?text=Logo`;
 
   return (
