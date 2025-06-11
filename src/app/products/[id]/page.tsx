@@ -16,7 +16,7 @@ const PLACEHOLDER_IMAGE_URL_600 = 'https://placehold.co/600x600.png';
 const PLACEHOLDER_IMAGE_URL_400 = 'https://placehold.co/400x400.png';
 
 // Fetches all product IDs from RTDB for static generation
-export async function generateStaticParams() {
+export async function generateStaticParams(): Promise<{ id: string }[]> {
   try {
     const productsRef = ref(rtdb, 'products');
     const snapshot = await get(productsRef);
