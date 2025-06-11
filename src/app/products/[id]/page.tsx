@@ -77,8 +77,12 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
   }
 }
 
+interface PageProps {
+  params: { id: string };
+}
+
 // Explicitly type the props for the page component
-async function ProductDetailsPageContent({ params }: { params: { id: string } }) {
+async function ProductDetailsPageContent({ params }: PageProps) {
   const { id } = params;
   let product: ProductType | undefined;
   let relatedProducts: ProductType[] = [];
