@@ -81,7 +81,6 @@ interface PageProps {
   params: { id: string };
 }
 
-// Explicitly type the props for the page component
 async function ProductDetailsPageContent({ params }: PageProps) {
   const { id } = params;
   let product: ProductType | undefined;
@@ -209,10 +208,12 @@ async function ProductDetailsPageContent({ params }: PageProps) {
   );
 }
 
+interface PageProps {
+  params: { id: string };
+}
+
 export default async function ProductDetailsPage({
   params,
-}: {
-  params: { id: string };
-}) {
+}: PageProps) {
   return <ProductDetailsPageContent params={params} />;
 }
