@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  assetPrefix: '/ushapp_ai/',
   images: {
     remotePatterns: [
       {
