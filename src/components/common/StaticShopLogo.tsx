@@ -16,8 +16,8 @@ export function StaticShopLogo({
   className
 }: StaticShopLogoProps) {
   // This component expects the logo image to be located at `public/logo.png`
-  const logoSrc = "./logo.png";
-  // const placeholderSrc = `https://placehold.co/${width}x${height}.png?text=Logo`;
+  // The src path MUST start with a leading slash for local public assets.
+  const logoSrc = "/logo.png"; 
 
   return (
     <Image
@@ -27,9 +27,10 @@ export function StaticShopLogo({
       height={height}
       className={cn(
         "rounded-lg",
-        // "h-auto", // Removed based on previous interaction; width/height props should define aspect.
+        // Ensuring width and height props define aspect, not overridden by h-auto unless intended
         className
       )}
+      style={{ height: 'auto' }} // Added to help maintain aspect ratio if CSS resizes
       priority
       data-ai-hint="app logo"
     />

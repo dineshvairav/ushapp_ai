@@ -114,12 +114,12 @@ export default function AddProductPage() {
     }
 
     const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
-    let uploadedImagesData: ProductImage[] = [];
+    let productImagesForDB: ProductImage[] = [];
 
     if (imagePreviews.length > 0) {
-        uploadedImagesData = await Promise.all(
+        const imageUploadResults = await Promise.all(
             imagePreviews.map(async (imgPreview) => {
-            if (imgPreview.file) { // New file to upload
+            if (imgPreview.file) { 
                 const filePath = `product-images/${newProductId}/${Date.now()}-${imgPreview.file.name}`;
                 const fileStorageRef = storageRefStandard(storage, filePath);
                 const uploadTask = uploadBytesResumable(fileStorageRef, imgPreview.file, { contentType: imgPreview.file.type });
@@ -129,19 +129,20 @@ export default function AddProductPage() {
                 toast({ title: "Image Uploaded", description: `${imgPreview.file.name} successfully uploaded.`, duration: 2000 });
                 return { src: downloadURL, hint: imgPreview.hint || 'product image' };
             }
-            // Should not happen for "add product" page as all images are new
+            // This case handles pre-existing URLs if the logic were to support them here (though for 'add' it's usually all new files)
             return { src: imgPreview.src, hint: imgPreview.hint || 'product image' }; 
             })
         ).catch(uploadError => {
             console.error("Error during image uploads:", uploadError);
             toast({ variant: "destructive", title: "Image Upload Failed", description: "One or more images could not be uploaded." });
             setIsLoading(false);
-            return null; // Indicate failure
+            return null; 
         });
 
-        if (!uploadedImagesData) {
+        if (imageUploadResults === null) { // Check if Promise.all().catch() returned null
             return; // Stop if image upload failed
         }
+        productImagesForDB = imageUploadResults; // Assign if successful
     }
 
 
@@ -154,7 +155,7 @@ export default function AddProductPage() {
       mop: mop ? parseFloat(mop) : undefined,
       dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: uploadedImagesData,
+      images: productImagesForDB,
       details: {},
     };
 
@@ -178,7 +179,6 @@ export default function AddProductPage() {
   };
   
   useEffect(() => {
-    // Cleanup for blob URLs when component unmounts or imagePreviews change and an image is removed
     return () => {
       imagePreviews.forEach(img => {
         if (img.src.startsWith('blob:')) { 
@@ -186,7 +186,7 @@ export default function AddProductPage() {
         }
       });
     };
-  }, []);
+  }, [imagePreviews]); // Added imagePreviews dependency for more robust cleanup
 
 
   return (

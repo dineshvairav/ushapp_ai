@@ -146,31 +146,29 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     const productPath = `products/${productId}`;
     const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
 
-    const uploadedImagesData: ProductImage[] = await Promise.all(
-      imagePreviews.map(async (imgPreview) => {
-        if (imgPreview.file) { // New file to upload
-          const filePath = `product-images/${productId}/${Date.now()}-${imgPreview.file.name}`;
-          const fileStorageRef = storageRefStandard(storage, filePath);
-          const uploadTask = uploadBytesResumable(fileStorageRef, imgPreview.file, { contentType: imgPreview.file.type });
-          
-          // Wait for upload to complete
-          await uploadTask; 
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          toast({ title: "Image Uploaded", description: `${imgPreview.file.name} successfully uploaded.`, duration: 2000 });
-          return { src: downloadURL, hint: imgPreview.hint || 'product image' };
-        }
-        // Existing image, just return its data
-        return { src: imgPreview.src, hint: imgPreview.hint || 'product image' };
-      })
-    ).catch(uploadError => {
-      console.error("Error during image uploads:", uploadError);
-      toast({ variant: "destructive", title: "Image Upload Failed", description: "One or more images could not be uploaded. Please try again." });
-      setIsSaving(false); // Stop saving process
-      return null; // Indicate failure
-    });
+    let finalUploadedImagesData: ProductImage[];
 
-    if (!uploadedImagesData) { // If Promise.all rejected
-        return; // Stop if image upload failed
+    try {
+        finalUploadedImagesData = await Promise.all(
+            imagePreviews.map(async (imgPreview) => {
+                if (imgPreview.file) { 
+                    const filePath = `product-images/${productId}/${Date.now()}-${imgPreview.file.name}`;
+                    const fileStorageRef = storageRefStandard(storage, filePath);
+                    const uploadTask = uploadBytesResumable(fileStorageRef, imgPreview.file, { contentType: imgPreview.file.type });
+                    
+                    await uploadTask; 
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    toast({ title: "Image Uploaded", description: `${imgPreview.file.name} successfully uploaded.`, duration: 2000 });
+                    return { src: downloadURL, hint: imgPreview.hint || 'product image' };
+                }
+                return { src: imgPreview.src, hint: imgPreview.hint || 'product image' };
+            })
+        );
+    } catch (uploadError) {
+        console.error("Error during image uploads:", uploadError);
+        toast({ variant: "destructive", title: "Image Upload Failed", description: "One or more images could not be uploaded. Please try again." });
+        setIsSaving(false); 
+        return; 
     }
     
     const updatedProductData: Partial<Product> = { 
@@ -181,7 +179,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       mop: mop ? parseFloat(mop) : undefined,
       dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: uploadedImagesData,
+      images: finalUploadedImagesData,
       details: product?.details || {}, 
     };
 
@@ -205,16 +203,16 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
   };
 
   useEffect(() => {
-    // Cleanup for blob URLs when component unmounts or imagePreviews change and an image is removed
     return () => {
       imagePreviews.forEach(img => {
-        if (img.src.startsWith('blob:') && !img.file) { // If it's a blob URL but no longer has a file (e.g., was removed)
-           // This logic might be tricky; direct cleanup usually happens in handleRemoveImage
-           // Or ensure all blob URLs are revoked if the component unmounts before save
+        if (img.src.startsWith('blob:') && !img.file) { 
+           // Blob URLs are primarily revoked in handleRemoveImage or when imagePreviews changes.
+           // This is a fallback for unmount.
+           URL.revokeObjectURL(img.src);
         }
       });
     };
-  }, []); // Empty dependency array means this runs on unmount. Consider imagePreviews in dep array if more granular cleanup needed.
+  }, [imagePreviews]);
 
 
   if (isLoadingState) {
