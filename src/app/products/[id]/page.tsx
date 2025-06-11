@@ -1,4 +1,3 @@
-
 import type { Product as ProductType } from '@/data/products';
 import { MainAppLayout } from '@/components/layout/MainAppLayout';
 import Image from 'next/image';
@@ -16,7 +15,7 @@ const PLACEHOLDER_IMAGE_URL_600 = 'https://placehold.co/600x600.png';
 const PLACEHOLDER_IMAGE_URL_400 = 'https://placehold.co/400x400.png';
 
 // Fetches all product IDs from RTDB for static generation
-export async function generateStaticParams() {
+export async function generateStaticParams(): Promise<{ id: string }[]> {
   try {
     const productsRef = ref(rtdb, 'products');
     const snapshot = await get(productsRef);
@@ -77,12 +76,7 @@ async function getRelatedProducts(currentProduct: ProductType): Promise<ProductT
   }
 }
 
-// Explicitly type the props for the page component
-export default async function ProductDetailsPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+async function ProductDetailsPageContent({ params }: any) {
   const { id } = params;
   let product: ProductType | undefined;
   let relatedProducts: ProductType[] = [];
@@ -98,7 +92,6 @@ export default async function ProductDetailsPage({
     fetchError = error.message || "An unknown error occurred fetching product data.";
   }
 
-
   if (fetchError || !product) {
     return (
       <MainAppLayout>
@@ -106,13 +99,13 @@ export default async function ProductDetailsPage({
           <PackageOpen className="mx-auto h-16 w-16 text-destructive mb-4" />
           <h1 className="text-2xl font-semibold text-foreground">Product Not Found or Error</h1>
           <p className="text-muted-foreground mb-6">
-             {fetchError
+            {fetchError
               ? `Error: ${fetchError}`
               : `The product with ID "${id}" could not be found.`}
           </p>
           <Link href="/shop">
             <Button variant="link" className="mt-4 text-primary">
-             <ChevronLeft className="mr-2 h-4 w-4" />
+              <ChevronLeft className="mr-2 h-4 w-4" />
               Back to Shop
             </Button>
           </Link>
@@ -131,7 +124,7 @@ export default async function ProductDetailsPage({
       </div>
       <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-start">
         <div className="md:sticky md:top-24">
-           <Carousel className="w-full max-w-md mx-auto rounded-lg overflow-hidden shadow-xl border border-border bg-card">
+          <Carousel className="w-full max-w-md mx-auto rounded-lg overflow-hidden shadow-xl border border-border bg-card">
             <CarouselContent>
               {product.images && product.images.length > 0 ? (
                 product.images.map((img, index) => {
@@ -160,8 +153,8 @@ export default async function ProductDetailsPage({
               ) : (
                 <CarouselItem>
                   <div className="aspect-square relative bg-muted flex items-center justify-center">
-                     <Image src={PLACEHOLDER_IMAGE_URL_600} alt="Placeholder image" fill className="object-cover opacity-50" data-ai-hint="placeholder image" />
-                     <p className="text-muted-foreground z-10">No image available</p>
+                    <Image src={PLACEHOLDER_IMAGE_URL_600} alt="Placeholder image" fill className="object-cover opacity-50" data-ai-hint="placeholder image" />
+                    <p className="text-muted-foreground z-10">No image available</p>
                   </div>
                 </CarouselItem>
               )}
@@ -208,4 +201,8 @@ export default async function ProductDetailsPage({
       )}
     </MainAppLayout>
   );
+}
+
+export default async function ProductDetailsPage({ params }: any) {
+  return <ProductDetailsPageContent params={params} />;
 }
