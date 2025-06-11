@@ -9,9 +9,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  output: 'export',
   images: {
-    unoptimized: true, // Added this line
     remotePatterns: [
       {
         protocol: 'https',
