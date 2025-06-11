@@ -9,7 +9,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  assetPrefix: '/',
+  assetPrefix: '',
+  basePath: '',
   images: {
     remotePatterns: [
       {
