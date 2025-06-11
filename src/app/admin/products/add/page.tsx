@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -12,12 +12,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { ArrowLeft, UploadCloud, Trash2, PackagePlus, Loader2 } from 'lucide-react';
-import type { Category } from '@/data/categories'; // Import Category type
+import type { Category } from '@/data/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { rtdb } from '@/lib/firebase';
-import { ref, set, push, onValue } from 'firebase/database'; // Added onValue
+import { rtdb, app as firebaseApp } from '@/lib/firebase';
+import { ref, set, push, onValue } from 'firebase/database';
+import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useToast } from '@/hooks/use-toast';
-import type { Product } from '@/data/products';
+import type { Product, ProductImage } from '@/data/products';
+
+interface ManagedImage {
+  src: string;
+  file?: File;
+  hint?: string;
+}
+
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app";
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -30,7 +39,7 @@ export default function AddProductPage() {
   const [mop, setMop] = useState('');
   const [dp, setDp] = useState('');
   const [category, setCategory] = useState('');
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<ManagedImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const [dbCategories, setDbCategories] = useState<Category[]>([]);
@@ -58,24 +67,28 @@ export default function AddProductPage() {
     return () => unsubscribe();
   }, [toast]);
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
-      const newPreviews: string[] = [];
-      Array.from(files).forEach(file => {
-        newPreviews.push(URL.createObjectURL(file));
-      });
-      setImagePreviews(prev => [...prev, ...newPreviews].slice(0, 5));
+      const currentImageCount = imagePreviews.length;
+      const filesToAdd = Array.from(files).slice(0, 5 - currentImageCount);
+
+      const newManagedImages: ManagedImage[] = filesToAdd.map(file => ({
+        src: URL.createObjectURL(file),
+        file: file,
+        hint: 'new product image'
+      }));
+      setImagePreviews(prev => [...prev, ...newManagedImages]);
     }
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
     setImagePreviews(prev => {
-      const newPreviews = prev.filter((_, index) => index !== indexToRemove);
-      if (prev[indexToRemove]?.startsWith('blob:')) {
-        URL.revokeObjectURL(prev[indexToRemove] as string);
+      const imageToRemove = prev[indexToRemove];
+      if (imageToRemove?.src.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove.src);
       }
-      return newPreviews;
+      return prev.filter((_, index) => index !== indexToRemove);
     });
   };
 
@@ -100,6 +113,38 @@ export default function AddProductPage() {
       return;
     }
 
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
+    let uploadedImagesData: ProductImage[] = [];
+
+    if (imagePreviews.length > 0) {
+        uploadedImagesData = await Promise.all(
+            imagePreviews.map(async (imgPreview) => {
+            if (imgPreview.file) { // New file to upload
+                const filePath = `product-images/${newProductId}/${Date.now()}-${imgPreview.file.name}`;
+                const fileStorageRef = storageRefStandard(storage, filePath);
+                const uploadTask = uploadBytesResumable(fileStorageRef, imgPreview.file, { contentType: imgPreview.file.type });
+                
+                await uploadTask;
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                toast({ title: "Image Uploaded", description: `${imgPreview.file.name} successfully uploaded.`, duration: 2000 });
+                return { src: downloadURL, hint: imgPreview.hint || 'product image' };
+            }
+            // Should not happen for "add product" page as all images are new
+            return { src: imgPreview.src, hint: imgPreview.hint || 'product image' }; 
+            })
+        ).catch(uploadError => {
+            console.error("Error during image uploads:", uploadError);
+            toast({ variant: "destructive", title: "Image Upload Failed", description: "One or more images could not be uploaded." });
+            setIsLoading(false);
+            return null; // Indicate failure
+        });
+
+        if (!uploadedImagesData) {
+            return; // Stop if image upload failed
+        }
+    }
+
+
     const newProductData: Product = {
       id: newProductId,
       name,
@@ -109,7 +154,7 @@ export default function AddProductPage() {
       mop: mop ? parseFloat(mop) : undefined,
       dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: imagePreviews.map(src => ({ src, hint: 'new product' })),
+      images: uploadedImagesData,
       details: {},
     };
 
@@ -131,6 +176,18 @@ export default function AddProductPage() {
       setIsLoading(false);
     }
   };
+  
+  useEffect(() => {
+    // Cleanup for blob URLs when component unmounts or imagePreviews change and an image is removed
+    return () => {
+      imagePreviews.forEach(img => {
+        if (img.src.startsWith('blob:')) { 
+           URL.revokeObjectURL(img.src);
+        }
+      });
+    };
+  }, []);
+
 
   return (
     <MainAppLayout>
@@ -150,7 +207,7 @@ export default function AddProductPage() {
               <PackagePlus className="h-8 w-8 text-primary" />
               <CardTitle className="text-2xl md:text-3xl text-primary">Add New Product</CardTitle>
             </div>
-            <CardDescription>Fill in the details for the new product. Data will be saved to Firebase Realtime Database.</CardDescription>
+            <CardDescription>Fill in the details for the new product. Images will be uploaded to Firebase Storage.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
@@ -254,9 +311,9 @@ export default function AddProductPage() {
             <div className="space-y-2">
               <Label className="text-foreground">Product Images</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {imagePreviews.map((src, index) => (
+                {imagePreviews.map((imgItem, index) => (
                   <div key={index} className="relative group aspect-square border border-border rounded-md overflow-hidden">
-                    <Image src={src} alt={`Preview ${index + 1}`} fill className="object-cover" data-ai-hint="product image preview"/>
+                    <Image src={imgItem.src} alt={`Preview ${index + 1}`} fill className="object-cover" data-ai-hint={imgItem.hint || "product image preview"}/>
                     <Button
                       type="button"
                       variant="destructive"
@@ -264,6 +321,7 @@ export default function AddProductPage() {
                       className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => handleRemoveImage(index)}
                       disabled={isLoading}
+                      title="Remove image"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -287,10 +345,10 @@ export default function AddProductPage() {
                 accept="image/*"
                 onChange={handleImageUpload}
                 className="hidden"
-                disabled={isLoading}
+                disabled={isLoading || imagePreviews.length >= 5}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Max 5 images. Image URLs will be saved to RTDB. For permanent file storage, Firebase Storage integration is needed.
+                New images will be uploaded to Firebase Storage. Max 5 images.
               </p>
             </div>
 
@@ -306,3 +364,4 @@ export default function AddProductPage() {
     </MainAppLayout>
   );
 }
+

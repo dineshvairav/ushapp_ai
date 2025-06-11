@@ -1,17 +1,22 @@
 
 import type { Category } from './categories';
 
+export type ProductImage = {
+  src: string;
+  hint: string;
+};
+
 export type Product = {
   id: string;
   name: string;
   description: string;
   price: number;
   category: Category['id'];
-  images: Array<{ src: string; hint: string }>;
+  images: ProductImage[]; // Updated to use ProductImage type
   details?: Record<string, string>;
-  qty?: number; // Renamed from stock, represents quantity
-  mop?: number; // Maximum Offer Price
-  dp?: number;  // Dealer Price
+  qty?: number;
+  mop?: number;
+  dp?: number;
 };
 
 // Firebase Storage base URL structure:
@@ -124,3 +129,4 @@ export const products: Product[] = [
     dp: 70.00,
   },
 ];
+

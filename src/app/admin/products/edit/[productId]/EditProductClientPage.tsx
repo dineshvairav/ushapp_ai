@@ -11,18 +11,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import type { Product } from '@/data/products';
-import type { Category } from '@/data/categories'; // Import Category type
+import type { Product, ProductImage } from '@/data/products';
+import type { Category } from '@/data/categories';
 import { ArrowLeft, Loader2, UploadCloud, Trash2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { rtdb } from '@/lib/firebase'; 
-import { ref, update, onValue } from 'firebase/database'; // Added onValue
+import { rtdb, app as firebaseApp } from '@/lib/firebase'; 
+import { ref, update, onValue } from 'firebase/database';
+import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useToast } from '@/hooks/use-toast';
 
 interface EditProductClientPageProps {
   productId: string;
   initialProduct: Product | undefined;
 }
+
+interface ManagedImage {
+  src: string;
+  file?: File;
+  hint?: string;
+}
+
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app";
 
 export default function EditProductClientPage({ productId, initialProduct }: EditProductClientPageProps) {
   const router = useRouter();
@@ -39,8 +48,8 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
   const [mop, setMop] = useState(''); 
   const [dp, setDp] = useState('');   
   const [category, setCategory] = useState('');
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [originalImageSrcs, setOriginalImageSrcs] = useState<string[]>([]);
+  
+  const [imagePreviews, setImagePreviews] = useState<ManagedImage[]>([]);
 
   const [dbCategories, setDbCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
@@ -79,11 +88,10 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       setDp(initialProduct.dp?.toString() || '');
       setCategory(initialProduct.category);
       
-      const currentImageSrcs = (initialProduct.images && Array.isArray(initialProduct.images))
-        ? initialProduct.images.map(img => img.src)
+      const currentImages: ManagedImage[] = (initialProduct.images && Array.isArray(initialProduct.images))
+        ? initialProduct.images.map(img => ({ src: img.src, hint: img.hint }))
         : [];
-      setImagePreviews(currentImageSrcs);
-      setOriginalImageSrcs(currentImageSrcs);
+      setImagePreviews(currentImages);
       
       setIsLoadingState(false);
     } else {
@@ -103,21 +111,21 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       const currentImageCount = imagePreviews.length;
       const filesToAdd = Array.from(files).slice(0, 5 - currentImageCount);
 
-      const newPreviews: string[] = [];
-      filesToAdd.forEach(file => {
-        const objectUrl = URL.createObjectURL(file);
-        newPreviews.push(objectUrl);
-      });
+      const newManagedImages: ManagedImage[] = filesToAdd.map(file => ({
+        src: URL.createObjectURL(file),
+        file: file,
+        hint: 'new product image' 
+      }));
 
-      setImagePreviews(prev => [...prev, ...newPreviews]);
+      setImagePreviews(prev => [...prev, ...newManagedImages]);
     }
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
     setImagePreviews(prev => {
       const imageToRemove = prev[indexToRemove];
-      if (imageToRemove?.startsWith('blob:')) {
-        URL.revokeObjectURL(imageToRemove);
+      if (imageToRemove?.src.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove.src);
       }
       return prev.filter((_, index) => index !== indexToRemove);
     });
@@ -136,24 +144,35 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     setIsSaving(true);
 
     const productPath = `products/${productId}`;
-    
-    const finalImages = imagePreviews.map(src => {
-        // Use optional chaining for initialProduct and its images property
-        const originalImage = initialProduct?.images?.find(img => img.src === src);
-        if (originalImage) return originalImage;
-        if (src.startsWith('blob:')) {
-            // For blob URLs, we need to decide how to handle them.
-            // Option 1: Upload them to Firebase Storage and get a persistent URL. (Complex for this scope)
-            // Option 2: Store them as a special type or a placeholder indicating it's a local preview.
-            // For now, let's assume they are temporary and might not persist correctly if not uploaded.
-            // This example will just save the blob URL if it's new, which is not ideal for persistence.
-            // A real app would upload the blob to storage here.
-            return { src, hint: 'newly uploaded product image' }; // Mark as newly uploaded, may need real URL later
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
+
+    const uploadedImagesData: ProductImage[] = await Promise.all(
+      imagePreviews.map(async (imgPreview) => {
+        if (imgPreview.file) { // New file to upload
+          const filePath = `product-images/${productId}/${Date.now()}-${imgPreview.file.name}`;
+          const fileStorageRef = storageRefStandard(storage, filePath);
+          const uploadTask = uploadBytesResumable(fileStorageRef, imgPreview.file, { contentType: imgPreview.file.type });
+          
+          // Wait for upload to complete
+          await uploadTask; 
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          toast({ title: "Image Uploaded", description: `${imgPreview.file.name} successfully uploaded.`, duration: 2000 });
+          return { src: downloadURL, hint: imgPreview.hint || 'product image' };
         }
-        // If it's an existing non-blob URL, keep its hint or use a generic one
-        return { src, hint: 'product image' };
+        // Existing image, just return its data
+        return { src: imgPreview.src, hint: imgPreview.hint || 'product image' };
+      })
+    ).catch(uploadError => {
+      console.error("Error during image uploads:", uploadError);
+      toast({ variant: "destructive", title: "Image Upload Failed", description: "One or more images could not be uploaded. Please try again." });
+      setIsSaving(false); // Stop saving process
+      return null; // Indicate failure
     });
 
+    if (!uploadedImagesData) { // If Promise.all rejected
+        return; // Stop if image upload failed
+    }
+    
     const updatedProductData: Partial<Product> = { 
       name,
       description,
@@ -162,7 +181,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
       mop: mop ? parseFloat(mop) : undefined,
       dp: dp ? parseFloat(dp) : undefined,
       category,
-      images: finalImages, // Use the processed images
+      images: uploadedImagesData,
       details: product?.details || {}, 
     };
 
@@ -185,13 +204,18 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     }
   };
 
-  // Cleanup blob URLs when component unmounts or imagePreviews change
   useEffect(() => {
-    const currentBlobPreviews = imagePreviews.filter(src => src.startsWith('blob:'));
+    // Cleanup for blob URLs when component unmounts or imagePreviews change and an image is removed
     return () => {
-      currentBlobPreviews.forEach(URL.revokeObjectURL);
+      imagePreviews.forEach(img => {
+        if (img.src.startsWith('blob:') && !img.file) { // If it's a blob URL but no longer has a file (e.g., was removed)
+           // This logic might be tricky; direct cleanup usually happens in handleRemoveImage
+           // Or ensure all blob URLs are revoked if the component unmounts before save
+        }
+      });
     };
-  }, [imagePreviews]);
+  }, []); // Empty dependency array means this runs on unmount. Consider imagePreviews in dep array if more granular cleanup needed.
+
 
   if (isLoadingState) {
     return (
@@ -204,7 +228,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     );
   }
 
-  if (!product && !initialProduct) { // More robust check
+  if (!product && !initialProduct) {
     return (
         <MainAppLayout>
              <div className="text-center py-10">
@@ -339,9 +363,9 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
             <div className="space-y-2">
               <Label className="text-foreground">Product Images (Max 5)</Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {imagePreviews.map((src, index) => (
-                  <div key={src + index} className="relative group aspect-square border border-border rounded-md overflow-hidden">
-                    <Image src={src} alt={`Preview ${index + 1}`} fill className="object-cover" data-ai-hint="product image preview" />
+                {imagePreviews.map((imgItem, index) => (
+                  <div key={imgItem.src + index} className="relative group aspect-square border border-border rounded-md overflow-hidden">
+                    <Image src={imgItem.src} alt={`Preview ${index + 1}`} fill className="object-cover" data-ai-hint={imgItem.hint || "product image preview"} />
                     <Button
                       type="button"
                       variant="destructive"
@@ -349,6 +373,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
                       className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => handleRemoveImage(index)}
                       disabled={isSaving}
+                      title="Remove image"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -374,7 +399,7 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
                 disabled={isSaving || imagePreviews.length >= 5}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                For new images, previews are shown. For permanent storage, Firebase Storage integration is recommended. Existing database URLs are preserved unless image is removed.
+                New images will be uploaded to Firebase Storage. Max 5 images.
               </p>
             </div>
 
@@ -390,3 +415,4 @@ export default function EditProductClientPage({ productId, initialProduct }: Edi
     </MainAppLayout>
   );
 }
+
