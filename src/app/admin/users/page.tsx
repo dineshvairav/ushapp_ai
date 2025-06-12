@@ -12,83 +12,142 @@ import { Badge } from '@/components/ui/badge';
 import { Users, ArrowLeft, Loader2, ShieldCheck, UserCog, UserX, AlertTriangle } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { getFunctions, httpsCallable, type HttpsCallableResult } from 'firebase/functions';
 import { useToast } from '@/hooks/use-toast';
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // Used for initial admin check, actual authorization happens in functions
 
 interface ManagedUser {
-  id: string;
   uid: string;
   email: string | null;
   displayName: string | null;
-  isDealer: boolean; // This would typically come from Custom Claims
+  isDealer: boolean;
+  isAdmin: boolean;
   creationTime: string | null;
   lastSignInTime: string | null;
-  disabled: boolean; // This would be from Firebase Auth user record
+  disabled: boolean;
 }
 
-const dummyUsers: ManagedUser[] = [
-  { id: '1', uid: 'user1FirebaseUID', email: 'alice@example.com', displayName: 'Alice Wonderland', isDealer: false, creationTime: '2023-01-15', lastSignInTime: '2024-07-20', disabled: false },
-  { id: '2', uid: 'user2FirebaseUID', email: 'bob@example.com', displayName: 'Bob The Builder', isDealer: true, creationTime: '2023-03-22', lastSignInTime: '2024-07-18', disabled: false },
-  { id: '3', uid: 'user3FirebaseUID', email: 'charlie@example.com', displayName: 'Charlie Brown', isDealer: false, creationTime: '2023-05-10', lastSignInTime: '2024-06-01', disabled: true },
-  { id: '4', uid: 'user4FirebaseUID', email: 'diana@example.com', displayName: 'Diana Prince', isDealer: true, creationTime: '2022-11-05', lastSignInTime: '2024-07-21', disabled: false },
-];
+interface ListUsersResponse {
+  users: ManagedUser[];
+}
 
 export default function UserManagementPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isAdminLoading, setIsAdminLoading] = useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(true); // For admin auth check
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true); // For future real data fetching
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [errorLoadingUsers, setErrorLoadingUsers] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === ADMIN_EMAIL) {
+      setCurrentUser(user);
+      if (user && user.email === ADMIN_EMAIL) { // Initial client-side check for UI purposes
         setIsAuthorized(true);
       } else {
         setIsAuthorized(false);
         router.replace(user ? '/' : '/onboarding');
       }
-      setIsAdminLoading(false);
+      setIsPageLoading(false);
     });
     return () => unsubscribeAuth();
   }, [router]);
 
   useEffect(() => {
-    if (!isAuthorized || isAdminLoading) return;
+    if (!isAuthorized || isPageLoading) return;
 
-    // Simulate fetching users
-    setIsLoadingUsers(true);
-    setTimeout(() => {
-      setManagedUsers(dummyUsers);
-      setIsLoadingUsers(false);
-    }, 1000); // Simulate network delay
-  }, [isAuthorized, isAdminLoading]);
+    const fetchUsers = async () => {
+      setIsLoadingUsers(true);
+      setErrorLoadingUsers(null);
+      try {
+        const functions = getFunctions(auth.app);
+        const listAllUsersFunction = httpsCallable<void, HttpsCallableResult<ListUsersResponse>>(functions, 'listAllUsers');
+        const result = await listAllUsersFunction();
+        const data = result.data as ListUsersResponse;
+        setManagedUsers(data.users || []);
+      } catch (error: any) {
+        console.error("Error fetching users:", error);
+        setErrorLoadingUsers(error.message || "Failed to load users. Ensure you have admin privileges and the backend function is deployed.");
+        toast({
+          variant: "destructive",
+          title: "Error Fetching Users",
+          description: error.message || "Could not load user data from the server.",
+        });
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
 
-  const handleToggleDealerStatus = (userId: string, currentStatus: boolean) => {
-    toast({
-      title: "Backend Action Required",
-      description: `To change dealer status for user ${userId}, Firebase Admin SDK implementation is needed to set/unset custom claims.`,
-      variant: "default",
-      duration: 5000,
-    });
-    // In a real app, you'd call a backend endpoint here.
-    // For demo, we can toggle local state if you want to see UI change
-    // setManagedUsers(prev => prev.map(u => u.id === userId ? {...u, isDealer: !currentStatus} : u));
+    fetchUsers();
+  }, [isAuthorized, isPageLoading, toast]);
+
+  const callManageClaim = async (targetUid: string, claimName: string, claimValue: boolean, successMessage: string) => {
+    try {
+      const functions = getFunctions(auth.app);
+      const manageClaimFunction = httpsCallable< { targetUid: string; claimName: string; claimValue: boolean }, { success: boolean; message: string } >(functions, 'manageAdminClaim');
+      
+      const result = await manageClaimFunction({ targetUid, claimName, claimValue });
+
+      if (result.data.success) {
+        toast({ title: "Success", description: successMessage });
+        // Re-fetch users to reflect changes
+        setManagedUsers(prevUsers => prevUsers.map(u => 
+          u.uid === targetUid ? { ...u, [claimName]: claimValue } : u
+        ));
+         // To fully reflect custom claims, user might need to re-auth or token refresh.
+         // For immediate UI update, we optimistically update state.
+         // A full re-fetch might be better:
+         // const fetchUsers = async () => { ... }; fetchUsers();
+      } else {
+        throw new Error(result.data.message || "Failed to update claim.");
+      }
+    } catch (error: any) {
+      console.error(`Error updating ${claimName} status:`, error);
+      toast({ variant: "destructive", title: "Update Failed", description: error.message || `Could not update ${claimName} status.` });
+    }
   };
 
-  const handleToggleUserDisabledStatus = (userId: string, currentStatus: boolean) => {
-     toast({
-      title: "Backend Action Required",
-      description: `To ${currentStatus ? "enable" : "disable"} user ${userId}, Firebase Admin SDK implementation is needed to update the user's auth record.`,
-      variant: "default",
-      duration: 5000,
-    });
-    // setManagedUsers(prev => prev.map(u => u.id === userId ? {...u, disabled: !currentStatus} : u));
+  const handleToggleDealerStatus = async (targetUid: string, currentIsDealer: boolean) => {
+    await callManageClaim(targetUid, 'isDealer', !currentIsDealer, `User ${targetUid} dealer status set to ${!currentIsDealer}.`);
   };
 
-  if (isAdminLoading) {
+  const handleToggleAdminStatus = async (targetUid: string, currentIsAdmin: boolean) => {
+     if (currentUser && targetUid === currentUser.uid && currentIsAdmin) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Admin cannot remove their own admin status."});
+      return;
+    }
+    await callManageClaim(targetUid, 'isAdmin', !currentIsAdmin, `User ${targetUid} admin status set to ${!currentIsAdmin}.`);
+  };
+  
+  const handleToggleUserDisabledStatus = async (targetUid: string, currentIsDisabled: boolean) => {
+     if (currentUser && targetUid === currentUser.uid && !currentIsDisabled) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Admin cannot disable their own account."});
+      return;
+    }
+    try {
+      const functions = getFunctions(auth.app);
+      const manageUserStatusFunction = httpsCallable<{ targetUid: string; shouldBeDisabled: boolean }, { success: boolean; message: string }>(functions, 'manageUserDisabledStatus');
+      const result = await manageUserStatusFunction({ targetUid, shouldBeDisabled: !currentIsDisabled });
+
+      if (result.data.success) {
+        toast({ title: "Status Updated", description: result.data.message });
+        setManagedUsers(prevUsers => prevUsers.map(u => 
+          u.uid === targetUid ? { ...u, disabled: !currentIsDisabled } : u
+        ));
+      } else {
+        throw new Error(result.data.message || "Failed to update user status.");
+      }
+    } catch (error: any) {
+      console.error("Error toggling user disabled status:", error);
+      toast({ variant: "destructive", title: "Update Failed", description: error.message || "Could not update user status." });
+    }
+  };
+
+
+  if (isPageLoading) {
     return (
       <MainAppLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -127,7 +186,7 @@ export default function UserManagementPage() {
             User Management
           </h1>
           <p className="text-lg text-muted-foreground">
-            View and manage user accounts. (UI Prototype - Dummy Data)
+            View and manage user accounts. Data fetched live from Firebase.
           </p>
         </div>
       </div>
@@ -136,42 +195,49 @@ export default function UserManagementPage() {
         <CardHeader className="flex flex-row items-start gap-3">
           <AlertTriangle className="h-6 w-6 text-amber-500 mt-1" />
           <div>
-            <CardTitle className="text-amber-600">Important Implementation Notes</CardTitle>
-            <CardDescription className="text-amber-700/90">
-              This page demonstrates the UI for user management. Full functionality requires backend implementation.
-            </CardDescription>
+            <CardTitle className="text-amber-600">Important Notes</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="text-sm text-amber-700/90 space-y-1 pl-12">
-            <p><strong>Listing All Users:</strong> Requires using the Firebase Admin SDK on a secure backend (e.g., Firebase Functions) to fetch all user records. Client-side SDK cannot list all users.</p>
-            <p><strong>Role Management (e.g., "Is Dealer"):</strong> Requires using Firebase Custom Claims, set via the Firebase Admin SDK on a backend.</p>
-            <p><strong>Disabling/Enabling Users:</strong> Requires using the Firebase Admin SDK on a backend to update user authentication records.</p>
-            <p>The data displayed below is DUMMY data for demonstration.</p>
+            <p><strong>Data Source:</strong> User data is fetched from Firebase Authentication via a secure Cloud Function.</p>
+            <p><strong>Custom Claims:</strong> Roles like "Dealer" or "Admin" are managed using Firebase Custom Claims. Changes may require user to re-authenticate or for their ID token to refresh to take full effect on client-side checks immediately, though backend function calls will use the latest claims.</p>
+            <p><strong>Security:</strong> All actions (listing users, changing claims/status) are protected by backend checks ensuring only authorized admins can perform them.</p>
         </CardContent>
       </Card>
       
-
       {isLoadingUsers && (
         <div className="flex flex-col items-center justify-center min-h-[30vh] bg-card border border-border rounded-xl shadow-lg p-6">
           <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
-          <p className="text-muted-foreground">Loading user data...</p>
+          <p className="text-muted-foreground">Loading users from database...</p>
         </div>
       )}
 
-      {!isLoadingUsers && (
+      {errorLoadingUsers && !isLoadingUsers && (
+         <div className="bg-destructive/10 border border-destructive text-destructive p-4 rounded-md flex items-center gap-3">
+          <AlertTriangle className="h-6 w-6" />
+          <div>
+            <h3 className="font-semibold">Error Loading Users</h3>
+            <p>{errorLoadingUsers}</p>
+          </div>
+        </div>
+      )}
+
+      {!isLoadingUsers && !errorLoadingUsers && (
         <Card className="border-border shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl text-primary">User List</CardTitle>
-             <CardDescription>Displaying {managedUsers.length} users (dummy data).</CardDescription>
+             <CardDescription>Displaying {managedUsers.length} users.</CardDescription>
           </CardHeader>
           <CardContent>
             {managedUsers.length > 0 ? (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Display Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead className="text-center">Dealer</TableHead>
+                    <TableHead className="text-center">Admin</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead>UID</TableHead>
                     <TableHead className="text-center">Actions</TableHead>
@@ -179,46 +245,60 @@ export default function UserManagementPage() {
                 </TableHeader>
                 <TableBody>
                   {managedUsers.map((user) => (
-                    <TableRow key={user.id} className="hover:bg-muted/10">
-                      <TableCell className="font-medium text-foreground">{user.displayName || 'N/A'}</TableCell>
-                      <TableCell className="text-muted-foreground">{user.email || 'N/A'}</TableCell>
+                    <TableRow key={user.uid} className="hover:bg-muted/10">
+                      <TableCell className="font-medium text-foreground whitespace-nowrap">{user.displayName || 'N/A'}</TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">{user.email || 'N/A'}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={user.isDealer ? "default" : "outline"} className={user.isDealer ? "bg-green-600 hover:bg-green-700" : ""}>
-                          {user.isDealer ? 'Yes' : 'No'}
-                        </Badge>
-                      </TableCell>
-                       <TableCell className="text-center">
-                        <Badge variant={user.disabled ? "destructive" : "secondary"} className={!user.disabled ? "bg-muted text-muted-foreground" : ""}>
-                          {user.disabled ? 'Disabled' : 'Active'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground truncate max-w-[100px]" title={user.uid}>{user.uid}</TableCell>
-                      <TableCell className="text-center space-x-2">
                         <Button
-                          variant="outline"
+                          variant={user.isDealer ? "secondary" : "outline"}
                           size="sm"
                           onClick={() => handleToggleDealerStatus(user.uid, user.isDealer)}
-                          title={user.isDealer ? "Remove Dealer Status" : "Make Dealer"}
+                          className={user.isDealer ? "bg-green-600 hover:bg-green-700 text-white" : ""}
                         >
-                          <ShieldCheck className={`mr-1 h-4 w-4 ${user.isDealer ? 'text-green-500' : 'text-muted-foreground'}`} />
-                          Dealer
+                          <ShieldCheck className={`mr-1 h-4 w-4 ${user.isDealer ? '' : 'text-muted-foreground'}`} />
+                          {user.isDealer ? 'Yes' : 'No'}
                         </Button>
-                         <Button
-                          variant="outline"
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                            variant={user.isAdmin ? "secondary" : "outline"}
+                            size="sm"
+                            onClick={() => handleToggleAdminStatus(user.uid, user.isAdmin)}
+                            className={user.isAdmin ? "bg-sky-600 hover:bg-sky-700 text-white" : ""}
+                            disabled={currentUser?.uid === user.uid && user.isAdmin}
+                            title={currentUser?.uid === user.uid && user.isAdmin ? "Cannot remove own admin status" : (user.isAdmin ? "Remove Admin" : "Make Admin")}
+                          >
+                          <ShieldCheck className={`mr-1 h-4 w-4 ${user.isAdmin ? '' : 'text-muted-foreground'}`} />
+                          {user.isAdmin ? 'Yes' : 'No'}
+                        </Button>
+                      </TableCell>
+                       <TableCell className="text-center">
+                        <Button
+                          variant={user.disabled ? "destructive" : "outline"}
                           size="sm"
                           onClick={() => handleToggleUserDisabledStatus(user.uid, user.disabled)}
-                           title={user.disabled ? "Enable User" : "Disable User"}
+                          className={!user.disabled ? "text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700" : ""}
+                          disabled={currentUser?.uid === user.uid && !user.disabled}
+                          title={currentUser?.uid === user.uid && !user.disabled ? "Cannot disable own account" : (user.disabled ? "Enable User" : "Disable User")}
                         >
-                           {user.disabled ? <UserCog className="mr-1 h-4 w-4 text-green-500"/> : <UserX className="mr-1 h-4 w-4 text-destructive"/>}
-                           {user.disabled ? "Enable" : "Disable"}
+                           {user.disabled ? <UserX className="mr-1 h-4 w-4"/> : <UserCog className="mr-1 h-4 w-4"/>}
+                           {user.disabled ? 'Disabled' : 'Active'}
                         </Button>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground truncate max-w-[100px]" title={user.uid}>{user.uid}</TableCell>
+                      <TableCell className="text-center space-x-1 whitespace-nowrap">
+                         {/* Future actions like 'View Details' or 'Edit User' could go here */}
+                         <Button variant="ghost" size="sm" onClick={() => toast({title: "Info", description: `Created: ${user.creationTime ? new Date(user.creationTime).toLocaleDateString() : 'N/A'}\nLast Sign In: ${user.lastSignInTime ? new Date(user.lastSignInTime).toLocaleString() : 'N/A'}`})}>
+                            Info
+                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              </div>
             ) : (
-              <p className="text-muted-foreground text-center py-6">No users to display (or dummy data not loaded).</p>
+              <p className="text-muted-foreground text-center py-6">No users found in the database.</p>
             )}
           </CardContent>
         </Card>
@@ -226,5 +306,3 @@ export default function UserManagementPage() {
     </MainAppLayout>
   );
 }
-
-    

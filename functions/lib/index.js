@@ -1,3 +1,4 @@
+
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -23,45 +24,45 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.manageUserDisabledStatus = exports.manageAdminClaim = void 0;
+exports.listAllUsers = exports.manageUserDisabledStatus = exports.manageAdminClaim = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
-// Initialize Firebase Admin SDK.
-// This should only be done once per deployment.
+
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
+
 /**
- * Manages the 'isAdmin' custom claim for a target user.
+ * Manages a boolean custom claim for a target user.
  * - Caller must be an authenticated admin.
- * - Expects { targetUid: string, shouldBeAdmin: boolean } in the data payload.
+ * - Expects { targetUid: string, claimName: string, claimValue: boolean } in the data payload.
  */
 exports.manageAdminClaim = functions.https.onCall(async (data, context) => {
-    // 1. Ensure the caller is authenticated.
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    // 2. Ensure the caller is an admin (has the 'isAdmin' custom claim).
-    // IMPORTANT: The first admin user needs their 'isAdmin' claim set manually
-    // (e.g., via a one-time script, or by another trusted admin function).
     const callerIsAdmin = context.auth.token.isAdmin === true;
     if (!callerIsAdmin) {
-        throw new functions.https.HttpsError("permission-denied", "Caller does not have administrative privileges to manage admin claims.");
+        throw new functions.https.HttpsError("permission-denied", "Caller does not have administrative privileges.");
     }
-    const { targetUid, shouldBeAdmin } = data;
-    // 3. Validate input.
-    if (typeof targetUid !== "string" || typeof shouldBeAdmin !== "boolean") {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'targetUid' (string) and 'shouldBeAdmin' (boolean).");
+
+    const { targetUid, claimName, claimValue } = data;
+
+    if (typeof targetUid !== "string" || typeof claimName !== "string" || typeof claimValue !== "boolean") {
+        throw new functions.https.HttpsError("invalid-argument", "Required fields: targetUid (string), claimName (string), claimValue (boolean).");
     }
+
     try {
-        // 4. Set custom claim on the target user.
-        await admin.auth().setCustomUserClaims(targetUid, { isAdmin: shouldBeAdmin });
+        const user = await admin.auth().getUser(targetUid);
+        const currentClaims = user.customClaims || {};
+        const newClaims = { ...currentClaims, [claimName]: claimValue };
+
+        await admin.auth().setCustomUserClaims(targetUid, newClaims);
         return {
             success: true,
-            message: `User ${targetUid} admin status set to ${shouldBeAdmin}. Users may need to re-authenticate for the claim to take effect.`,
+            message: `User ${targetUid} claim '${claimName}' set to ${claimValue}. Users may need to re-authenticate for claims to take full effect.`,
         };
-    }
-    catch (error) {
+    } catch (error) {
         console.error("Error setting custom claims:", error);
         let errorMessage = "Internal server error while setting custom claims.";
         if (error instanceof Error) {
@@ -70,28 +71,25 @@ exports.manageAdminClaim = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("internal", errorMessage, error);
     }
 });
+
 /**
  * Manages the disabled status of a target user's account.
  * - Caller must be an authenticated admin.
  * - Expects { targetUid: string, shouldBeDisabled: boolean } in the data payload.
  */
 exports.manageUserDisabledStatus = functions.https.onCall(async (data, context) => {
-    // 1. Ensure the caller is authenticated.
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    // 2. Ensure the caller is an admin.
     const callerIsAdmin = context.auth.token.isAdmin === true;
     if (!callerIsAdmin) {
-        throw new functions.https.HttpsError("permission-denied", "Caller does not have administrative privileges to manage user status.");
+        throw new functions.https.HttpsError("permission-denied", "Caller does not have administrative privileges.");
     }
     const { targetUid, shouldBeDisabled } = data;
-    // 3. Validate input.
     if (typeof targetUid !== "string" || typeof shouldBeDisabled !== "boolean") {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'targetUid' (string) and 'shouldBeDisabled' (boolean).");
+        throw new functions.https.HttpsError("invalid-argument", "Required: targetUid (string), shouldBeDisabled (boolean).");
     }
     try {
-        // 4. Update the user's disabled status.
         await admin.auth().updateUser(targetUid, {
             disabled: shouldBeDisabled,
         });
@@ -99,10 +97,50 @@ exports.manageUserDisabledStatus = functions.https.onCall(async (data, context) 
             success: true,
             message: `User ${targetUid} account has been ${shouldBeDisabled ? "disabled" : "enabled"}.`,
         };
-    }
-    catch (error) {
+    } catch (error) {
         console.error("Error updating user disabled status:", error);
         let errorMessage = "Internal server error while updating user status.";
+        if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        throw new functions.https.HttpsError("internal", errorMessage, error);
+    }
+});
+
+/**
+ * Lists all users from Firebase Authentication.
+ * - Caller must be an authenticated admin.
+ * - Returns a list of users with relevant details.
+ */
+exports.listAllUsers = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const callerIsAdmin = context.auth.token.isAdmin === true;
+    if (!callerIsAdmin) {
+        throw new functions.https.HttpsError("permission-denied", "Caller does not have administrative privileges to list users.");
+    }
+
+    try {
+        const listUsersResult = await admin.auth().listUsers(1000); // Default max 1000 users per page
+        const users = listUsersResult.users.map(userRecord => {
+            return {
+                uid: userRecord.uid,
+                email: userRecord.email || null,
+                displayName: userRecord.displayName || null,
+                disabled: userRecord.disabled,
+                creationTime: userRecord.metadata.creationTime,
+                lastSignInTime: userRecord.metadata.lastSignInTime,
+                isAdmin: userRecord.customClaims?.isAdmin === true, // Include isAdmin claim
+                isDealer: userRecord.customClaims?.isDealer === true, // Include isDealer claim
+                // Add other claims if needed e.g.
+                // otherClaim: userRecord.customClaims?.otherClaim
+            };
+        });
+        return { users };
+    } catch (error) {
+        console.error("Error listing users:", error);
+        let errorMessage = "Internal server error while listing users.";
         if (error instanceof Error) {
             errorMessage = error.message;
         }
