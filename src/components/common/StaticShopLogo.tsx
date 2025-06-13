@@ -17,7 +17,7 @@ export function StaticShopLogo({
 }: StaticShopLogoProps) {
   // This component expects the logo image to be located at `public/logo.png`
   // The src path MUST start with a leading slash for local public assets.
-  const logoSrc = "./logo.png"; 
+  const logoSrc = "/logo.png"; 
 
   return (
     <Image
