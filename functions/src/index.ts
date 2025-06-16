@@ -3,7 +3,10 @@
 
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
-import * as functionsV2 from 'firebase-functions/v2'; // Main v2 import
+
+// Explicit v2 imports from subpaths
+import { onUserCreated, type AuthEventData } from "firebase-functions/v2/auth";
+import { onCall, HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
@@ -25,8 +28,8 @@ interface ManageUserDisabledStatusData {
 }
 
 // Auth trigger (v2) to create a user profile document in Firestore when a new user signs up
-export const createUserProfileDocument = functionsV2.auth.onUserCreated(
-  async (event: functionsV2.auth.AuthEventData<admin.auth.UserRecord>) => {
+export const createUserProfileDocument = onUserCreated(
+  async (event: AuthEventData<admin.auth.UserRecord>) => {
     const user = event.data; // The user object is in event.data
     if (!user) {
       logger.error('User data undefined in onUserCreated event. Full event:', event);
@@ -48,20 +51,20 @@ export const createUserProfileDocument = functionsV2.auth.onUserCreated(
         disabled: user.disabled,
       });
       logger.info(`Successfully created Firestore profile for UID: ${user.uid}`);
-    } catch (error) {
+    } catch (error: any) {
       logger.error(`Error creating Firestore profile for UID: ${user.uid}`, error);
     }
   }
 );
 
 // Callable function (v2) to list all users with their roles from Firestore
-export const listAllUsers = functionsV2.https.onCall(
-  async (request: functionsV2.https.CallableRequest<any>) => {
+export const listAllUsers = onCall(
+  async (request: CallableRequest<any>) => {
     logger.info('listAllUsers callable function (v2) invoked by UID:', request.auth?.uid);
 
     if (!request.auth || !request.auth.uid) {
       logger.error('listAllUsers (v2): Authentication token not available or UID missing.');
-      throw new functionsV2.https.HttpsError(
+      throw new HttpsError(
         'unauthenticated',
         'The function must be called while authenticated.'
       );
@@ -74,7 +77,7 @@ export const listAllUsers = functionsV2.https.onCall(
       const callerProfileDoc = await db.collection('userProfiles').doc(callerUid).get();
       if (!callerProfileDoc.exists) {
         logger.warn(`listAllUsers (v2): Admin check failed. Firestore profile not found for caller ${callerUid}.`);
-        throw new functionsV2.https.HttpsError(
+        throw new HttpsError(
           'permission-denied',
           'Admin verification failed: Profile not found.'
         );
@@ -82,7 +85,7 @@ export const listAllUsers = functionsV2.https.onCall(
       const callerProfileData = callerProfileDoc.data();
       if (!callerProfileData?.isAdmin) {
         logger.warn(`listAllUsers (v2): Caller ${callerUid} is not an admin. isAdmin: ${callerProfileData?.isAdmin}`);
-        throw new functionsV2.https.HttpsError(
+        throw new HttpsError(
           'permission-denied',
           'You must be an admin to list users.'
         );
@@ -125,10 +128,10 @@ export const listAllUsers = functionsV2.https.onCall(
       logger.error('listAllUsers (v2): Top-level unexpected error occurred.', {
         message: error.message,
         stack: error.stack,
-        details: error instanceof functionsV2.https.HttpsError ? error.details : undefined,
+        details: error instanceof HttpsError ? error.details : undefined,
         originalError: error,
       });
-      if (error instanceof functionsV2.https.HttpsError) {
+      if (error instanceof HttpsError) {
         throw error;
       }
       const errorMessage = typeof error.message === 'string' ? error.message : 'An unexpected internal error occurred while listing users.';
@@ -136,19 +139,19 @@ export const listAllUsers = functionsV2.https.onCall(
         originalError: typeof error.toString === 'function' ? error.toString() : 'Error object could not be stringified.',
         stack: typeof error.stack === 'string' ? error.stack : 'No stack trace available.',
       };
-      throw new functionsV2.https.HttpsError('internal', errorMessage, errorDetails);
+      throw new HttpsError('internal', errorMessage, errorDetails);
     }
   }
 );
 
 // Callable function (v2) to manage user roles (isAdmin, isDealer) in Firestore
-export const manageUserRole = functionsV2.https.onCall(
-  async (request: functionsV2.https.CallableRequest<ManageUserRoleData>) => {
+export const manageUserRole = onCall(
+  async (request: CallableRequest<ManageUserRoleData>) => {
     logger.info('manageUserRole (v2) called by UID:', request.auth?.uid, 'with data:', request.data);
 
     if (!request.auth || !request.auth.uid) {
       logger.error('manageUserRole (v2): Authentication token not available or UID missing.');
-      throw new functionsV2.https.HttpsError(
+      throw new HttpsError(
         'unauthenticated',
         'The function must be called while authenticated.'
       );
@@ -165,7 +168,7 @@ export const manageUserRole = functionsV2.https.onCall(
       typeof value !== 'boolean'
     ) {
       logger.error('manageUserRole (v2): Invalid input data:', request.data);
-      throw new functionsV2.https.HttpsError(
+      throw new HttpsError(
         'invalid-argument',
         "Invalid arguments provided. Required: targetUid (string), roleName ('isAdmin' or 'isDealer'), value (boolean)."
       );
@@ -175,14 +178,14 @@ export const manageUserRole = functionsV2.https.onCall(
       const callerProfileDoc = await db.collection('userProfiles').doc(callerUid).get();
       if (!callerProfileDoc.exists) {
         logger.warn(`manageUserRole (v2): Admin check failed. Firestore profile not found for caller ${callerUid}.`);
-        throw new functionsV2.https.HttpsError(
+        throw new HttpsError(
           'permission-denied',
           'Admin verification failed: Profile not found.'
         );
       }
       if (!callerProfileDoc.data()?.isAdmin) {
         logger.warn(`manageUserRole (v2): Caller ${callerUid} is not an admin.`);
-        throw new functionsV2.https.HttpsError(
+        throw new HttpsError(
           'permission-denied',
           'You must be an admin to manage user roles.'
         );
@@ -202,8 +205,8 @@ export const manageUserRole = functionsV2.https.onCall(
       return { success: true, message: `User ${targetUid} ${roleName} status updated to ${value}.` };
     } catch (error: any) {
       logger.error(`manageUserRole (v2): Error updating role for user ${targetUid}:`, error);
-      if (error instanceof functionsV2.https.HttpsError) throw error;
-      throw new functionsV2.https.HttpsError(
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError(
         'internal',
         error.message || `Failed to update ${roleName} for user.`
       );
@@ -212,13 +215,13 @@ export const manageUserRole = functionsV2.https.onCall(
 );
 
 // Callable function (v2) to manage user's disabled status in Firebase Auth
-export const manageUserDisabledStatus = functionsV2.https.onCall(
-  async (request: functionsV2.https.CallableRequest<ManageUserDisabledStatusData>) => {
+export const manageUserDisabledStatus = onCall(
+  async (request: CallableRequest<ManageUserDisabledStatusData>) => {
     logger.info('manageUserDisabledStatus (v2) called by UID:', request.auth?.uid, 'with data:', request.data);
 
     if (!request.auth || !request.auth.uid) {
       logger.error('manageUserDisabledStatus (v2): Authentication token not available or UID missing.');
-      throw new functionsV2.https.HttpsError(
+      throw new HttpsError(
         'unauthenticated',
         'The function must be called while authenticated.'
       );
@@ -229,7 +232,7 @@ export const manageUserDisabledStatus = functionsV2.https.onCall(
 
     if (!targetUid || typeof targetUid !== 'string' || typeof disabled !== 'boolean') {
       logger.error('manageUserDisabledStatus (v2): Invalid input data:', request.data);
-      throw new functionsV2.https.HttpsError(
+      throw new HttpsError(
         'invalid-argument',
         'Invalid arguments provided. Required: targetUid (string), disabled (boolean).'
       );
@@ -239,14 +242,14 @@ export const manageUserDisabledStatus = functionsV2.https.onCall(
       const callerProfileDoc = await db.collection('userProfiles').doc(callerUid).get();
       if (!callerProfileDoc.exists) {
         logger.warn(`manageUserDisabledStatus (v2): Admin check failed. Firestore profile not found for caller ${callerUid}.`);
-        throw new functionsV2.https.HttpsError(
+        throw new HttpsError(
           'permission-denied',
           'Admin verification failed: Profile not found.'
         );
       }
       if (!callerProfileDoc.data()?.isAdmin) {
         logger.warn(`manageUserDisabledStatus (v2): Caller ${callerUid} is not an admin.`);
-        throw new functionsV2.https.HttpsError(
+        throw new HttpsError(
           'permission-denied',
           'You must be an admin to manage user status.'
         );
@@ -261,11 +264,13 @@ export const manageUserDisabledStatus = functionsV2.https.onCall(
       return { success: true, message: `User ${targetUid} disabled status updated to ${disabled}.` };
     } catch (error: any) {
       logger.error(`manageUserDisabledStatus (v2): Error updating disabled status for user ${targetUid}:`, error);
-      if (error instanceof functionsV2.https.HttpsError) throw error;
-      throw new functionsV2.https.HttpsError(
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError(
         'internal',
         error.message || 'Failed to update user disabled status.'
       );
     }
   }
 );
+
+    
