@@ -1,13 +1,26 @@
 
-import * as logger from "firebase-functions/logger";
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import * as functions from "firebase-functions"; // Using v1 functions
+import * as logger from "firebase-functions/logger"; // Using v1 logger
 
 admin.initializeApp();
 const db = admin.firestore();
 
+// Define an interface for the data expected by manageUserRole
+interface ManageUserRoleData {
+  targetUid: string;
+  roleName: "isAdmin" | "isDealer";
+  value: boolean;
+}
+
+// Define an interface for the data expected by manageUserDisabledStatus
+interface ManageUserDisabledStatusData {
+  targetUid: string;
+  disabled: boolean;
+}
+
 // Auth trigger to create a user profile document in Firestore when a new user signs up
-export const createUserProfileDocument = functions.auth.user().onCreate(async (user) => {
+export const createUserProfileDocument = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
   logger.info(`New user created: UID: ${user.uid}, Email: ${user.email}`);
   const userProfileRef = db.collection("userProfiles").doc(user.uid);
 
@@ -31,7 +44,7 @@ export const createUserProfileDocument = functions.auth.user().onCreate(async (u
 
 
 // Callable function to list all users with their roles from Firestore
-export const listAllUsers = functions.https.onCall(async (data, context) => {
+export const listAllUsers = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   logger.info("listAllUsers callable function invoked by UID:", context.auth?.uid);
 
   if (!context.auth || !context.auth.uid) {
@@ -115,7 +128,7 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
 });
 
 // Callable function to manage user roles (isAdmin, isDealer) in Firestore
-export const manageUserRole = functions.https.onCall(async (data, context) => {
+export const manageUserRole = functions.https.onCall(async (data: ManageUserRoleData, context: functions.https.CallableContext) => {
   logger.info("manageUserRole called by UID:", context.auth?.uid, "with data:", data);
 
   if (!context.auth || !context.auth.uid) {
@@ -176,7 +189,7 @@ export const manageUserRole = functions.https.onCall(async (data, context) => {
 });
 
 // Callable function to manage user's disabled status in Firebase Auth
-export const manageUserDisabledStatus = functions.https.onCall(async (data, context) => {
+export const manageUserDisabledStatus = functions.https.onCall(async (data: ManageUserDisabledStatusData, context: functions.https.CallableContext) => {
   logger.info("manageUserDisabledStatus called by UID:", context.auth?.uid, "with data:", data);
 
   if (!context.auth || !context.auth.uid) {
