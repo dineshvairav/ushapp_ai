@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { User as UserIconLucide, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert, FileWarning, UploadCloud, Trash2, Users, BadgeInfo } from 'lucide-react';
+import { User as UserIconLucide, Mail, Edit3, LogOut, FileText, ImageIcon, Download, Camera, Phone, Loader2, ShieldAlert, FileWarning, UploadCloud, Trash2, Users, BadgeInfo, UserCheck } from 'lucide-react';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import Link from 'next/link';
 import { onAuthStateChanged, type User, signOut, updateProfile } from "firebase/auth";
@@ -18,13 +18,13 @@ import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloa
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { AdminUploadedFile, GuestSharedFile as AdminGuestSharedFile } from '@/app/admin/uploads/page';
+import type { AdminUploadedFile } from '@/app/admin/uploads/page'; // GuestSharedFile removed as it's too specific
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 
 export interface UserProfileData {
-  uid: string; // Ensure UID is part of the profile data
+  uid: string; 
   name: string;
   email: string;
   avatarUrl: string;
@@ -55,6 +55,8 @@ export interface GuestSpecificSharedFile {
 
 const DEFAULT_AVATAR_URL = 'https://placehold.co/200x200.png';
 const USER_ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
+const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app"; // Assuming this is your bucket
+
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -103,38 +105,48 @@ export default function ProfilePage() {
               email: profileData.email || user.email || 'No email',
               avatarUrl: profileData.photoURL || user.photoURL || DEFAULT_AVATAR_URL,
               joinDate: profileData.joinDate || (user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'N/A'),
-              phone: profileData.phone || '',
+              phone: profileData.phone || user.phoneNumber || '', // Prefer Firestore, then Auth phone
               isAdmin: profileData.isAdmin === true,
               isDealer: profileData.isDealer === true,
             });
             setAvatarSrc(profileData.photoURL || user.photoURL || DEFAULT_AVATAR_URL);
           } else {
-            // Profile doesn't exist, Auth trigger might not have run or failed.
-            // Fallback to auth data and default roles.
-            // A proper fix would be to ensure the Auth trigger is robust or create profile here if missing.
-            logger.warn(`Firestore profile for UID ${user.uid} not found. Using defaults.`);
-            setUserProfile({
+            // Firestore profile doesn't exist, create one (Auth trigger should ideally handle this)
+            const creationTime = user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : new Date().toISOString();
+            const defaultProfileData = {
               uid: user.uid,
-              name: user.displayName || 'User',
-              email: user.email || 'No email',
-              avatarUrl: user.photoURL || DEFAULT_AVATAR_URL,
-              joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'N/A',
-              phone: '',
+              email: user.email || "",
+              displayName: user.displayName || "User",
+              photoURL: user.photoURL || DEFAULT_AVATAR_URL,
               isAdmin: false,
               isDealer: false,
+              phone: user.phoneNumber || "",
+              joinDate: creationTime,
+              disabled: user.disabled,
+            };
+            await setDoc(doc(firestore, "userProfiles", user.uid), defaultProfileData);
+            setUserProfile({
+                uid: user.uid,
+                name: defaultProfileData.displayName,
+                email: defaultProfileData.email,
+                avatarUrl: defaultProfileData.photoURL,
+                joinDate: new Date(defaultProfileData.joinDate).toLocaleDateString(),
+                phone: defaultProfileData.phone,
+                isAdmin: defaultProfileData.isAdmin,
+                isDealer: defaultProfileData.isDealer,
             });
-            setAvatarSrc(user.photoURL || DEFAULT_AVATAR_URL);
+            setAvatarSrc(defaultProfileData.photoURL);
+            console.warn(`Created Firestore profile for UID ${user.uid} from client-side.`);
           }
         } catch (error) {
-          console.error("Error fetching user profile from Firestore:", error);
+          console.error("Error fetching/creating user profile from Firestore:", error);
           toast({variant: "destructive", title: "Profile Error", description: "Could not load your profile data."});
-           // Fallback to basic auth info
            setUserProfile({ uid: user.uid, name: user.displayName || 'User', email: user.email || 'No email', avatarUrl: user.photoURL || DEFAULT_AVATAR_URL, joinDate: 'N/A', phone: '', isAdmin: false, isDealer: false });
            setAvatarSrc(user.photoURL || DEFAULT_AVATAR_URL);
         }
 
         setIsLoadingUserFiles(true);
-        const userFilesDbRef = databaseRefRtdb(rtdb, `userFiles/${user.uid}`);
+        const userFilesDbRef = databaseRefRtdb(rtdb, `userUploadedFiles/${user.uid}`); // Corrected path
         const unsubscribeUserFiles = onValue(userFilesDbRef, (snapshot) => {
           const data = snapshot.val();
           setUserSpecificFiles(data ? Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a,b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()) : []);
@@ -197,15 +209,15 @@ export default function ProfilePage() {
     if (file && currentUser) {
       if (avatarSrc && avatarSrc.startsWith('blob:')) URL.revokeObjectURL(avatarSrc);
       const newPreviewSrc = URL.createObjectURL(file);
-      setAvatarSrc(newPreviewSrc); // Update preview immediately
+      setAvatarSrc(newPreviewSrc); 
 
-      const storage = getStorage(firebaseApp);
-      const avatarPath = `userAvatars/${currentUser.uid}/${file.name}`;
+      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
+      const avatarPath = `userAvatars/${currentUser.uid}/${Date.now()}-${file.name}`;
       const avatarStorageRef = storageRefStandard(storage, avatarPath);
       
       try {
         toast({ title: "Uploading Avatar...", description: "Please wait." });
-        const uploadTask = uploadBytesResumable(avatarStorageRef, file);
+        const uploadTask = uploadBytesResumable(avatarStorageRef, file, { contentType: file.type });
         await uploadTask;
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
@@ -213,14 +225,14 @@ export default function ProfilePage() {
         await updateDoc(doc(firestore, "userProfiles", currentUser.uid), { photoURL: downloadURL });
         
         setUserProfile(prev => ({ ...prev, avatarUrl: downloadURL }));
-        setAvatarSrc(downloadURL); // Update with persistent URL
+        setAvatarSrc(downloadURL); 
         toast({ title: "Avatar Updated", description: "Your new avatar has been saved." });
       } catch (error) {
         console.error("Error updating avatar:", error);
         toast({ variant: "destructive", title: "Avatar Update Failed", description: "Could not save your new avatar." });
-        setAvatarSrc(userProfile.avatarUrl); // Revert to old avatar on error
+        setAvatarSrc(userProfile.avatarUrl); 
       } finally {
-        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset file input
+        if (fileInputRef.current) fileInputRef.current.value = ''; 
       }
     }
   };
@@ -233,23 +245,34 @@ export default function ProfilePage() {
   const handleProfileSave = async (updatedData: UserProfileData) => {
     if (!currentUser) { toast({ variant: "destructive", title: "Error", description: "You must be logged in." }); return; }
     try {
-      // Update Firebase Auth profile (displayName only, email change needs separate flow)
-      if (currentUser.displayName !== updatedData.name) {
-        await updateProfile(currentUser, { displayName: updatedData.name });
+      
+      if (currentUser.displayName !== updatedData.name || currentUser.email !== updatedData.email) {
+         // Note: Email change requires re-authentication or separate verification flow.
+         // For simplicity, we only update displayName via updateProfile if it changed.
+         // Email in auth profile should be updated via specific Firebase methods like verifyBeforeUpdateEmail.
+        if (currentUser.displayName !== updatedData.name) {
+            await updateProfile(currentUser, { displayName: updatedData.name });
+        }
       }
-      // Update Firestore profile (name, phone)
+      
       const userProfileRef = doc(firestore, "userProfiles", currentUser.uid);
-      await updateDoc(userProfileRef, {
+      const dataToUpdate: Partial<UserProfileData> = {
         displayName: updatedData.name,
         phone: updatedData.phone,
-        // Note: email is typically not updated directly here due to security; use Firebase methods for email change.
-        // Roles (isAdmin, isDealer) are not updated here; they are managed by admins.
-      });
+      };
+      // Only update email in Firestore if it's different and if you intend to manage it there.
+      // Be mindful that this doesn't change the actual auth email used for login.
+      if (userProfile.email !== updatedData.email) {
+        dataToUpdate.email = updatedData.email;
+      }
+
+      await updateDoc(userProfileRef, dataToUpdate);
+      
       setUserProfile(prev => ({
         ...prev,
         name: updatedData.name,
         phone: updatedData.phone,
-        email: updatedData.email, // Reflect email if changed, though actual update is complex
+        email: updatedData.email, 
       }));
       toast({ title: "Profile Updated", description: "Your profile information has been saved." });
     } catch (error) {
@@ -258,12 +281,115 @@ export default function ProfilePage() {
     }
   };
   
-  const handleLogout = async () => { /* ... (existing handleLogout code) ... */ };
-  const handleUserFileSelect = (e: ChangeEvent<HTMLInputElement>) => { /* ... (existing code) ... */ };
-  const handleUserFileUpload = async (e: FormEvent<HTMLFormElement>) => { /* ... (existing code) ... */ };
-  const handleDeleteUserFile = async (file: UserUploadedFile) => { /* ... (existing code) ... */ };
-  const getFileIcon = (contentType: string) => { /* ... (existing code) ... */ };
-  const formatFileSize = (bytes: number) => { /* ... (existing code) ... */ };
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      // Resetting state and local storage, then redirecting
+      setCurrentUser(null);
+      setUserProfile({ uid: '', name: 'Guest User', email: 'Not logged in', avatarUrl: DEFAULT_AVATAR_URL, joinDate: '', phone: '', isAdmin: false, isDealer: false });
+      setAvatarSrc(DEFAULT_AVATAR_URL);
+      localStorage.removeItem('guestPhoneNumber');
+      setGuestAccessedPhoneNumber(null);
+      setGuestSpecificSharedFiles([]);
+      router.push('/onboarding'); // Redirect to onboarding after logout
+    } catch (error) {
+      console.error("Error logging out: ", error);
+      toast({ variant: "destructive", title: "Logout Failed", description: "Could not log you out. Please try again." });
+    }
+  };
+
+  const handleUserFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedUserFile(e.target.files[0]);
+      setUserUploadProgress(0);
+    } else {
+      setSelectedUserFile(null);
+    }
+  };
+
+  const handleUserFileUpload = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedUserFile || !currentUser) {
+      toast({ variant: "destructive", title: "Error", description: "No file selected or not logged in." });
+      return;
+    }
+
+    setIsUserUploading(true);
+    setUserUploadProgress(0);
+    const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
+    const filePath = `userUploadedFiles/${currentUser.uid}/${Date.now()}-${selectedUserFile.name}`;
+    const fileStorageRef = storageRefStandard(storage, filePath);
+    const metadata = { contentType: selectedUserFile.type || 'application/octet-stream' };
+    const uploadTask = uploadBytesResumable(fileStorageRef, selectedUserFile, metadata);
+
+    uploadTask.on('state_changed',
+      (snapshot) => setUserUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+      (error) => {
+        toast({ variant: "destructive", title: "Upload Failed", description: error.message });
+        setIsUserUploading(false);
+      },
+      async () => {
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const newFileRef = push(databaseRefRtdb(rtdb, `userUploadedFiles/${currentUser.uid}`));
+          const fileData: Omit<UserUploadedFile, 'id'> = {
+            fileName: selectedUserFile.name,
+            downloadURL,
+            contentType: selectedUserFile.type,
+            size: selectedUserFile.size,
+            uploadedAt: new Date().toISOString(),
+            uploaderUid: currentUser.uid,
+          };
+          await setRtdb(newFileRef, fileData);
+          toast({ title: "Upload Successful", description: `${selectedUserFile.name} uploaded.` });
+          setSelectedUserFile(null);
+          if (userFileInputRef.current) userFileInputRef.current.value = '';
+        } catch (dbError: any) {
+          toast({ variant: "destructive", title: "Database Error", description: dbError.message });
+        } finally {
+          setIsUserUploading(false);
+          setUserUploadProgress(0);
+        }
+      }
+    );
+  };
+  
+  const handleDeleteUserFile = async (file: UserUploadedFile) => {
+    if (!currentUser || !window.confirm(`Delete "${file.fileName}"?`)) return;
+    try {
+      const storage = getStorage(firebaseApp, TARGET_STORAGE_BUCKET);
+      // Construct storage path carefully. Assume path is 'userUploadedFiles/UID/timestamp-filename'
+      // This requires knowing the exact path. A safer way would be to store the full storage path in RTDB.
+      // For now, we'll assume the downloadURL can be parsed.
+      const url = new URL(file.downloadURL);
+      const pathSegments = url.pathname.split('/o/');
+      if (pathSegments.length <= 1) throw new Error("Cannot determine storage path from download URL.");
+      const encodedPath = pathSegments[1].split('?')[0];
+      if (!encodedPath) throw new Error("Storage path for deletion is empty or malformed.");
+      const storagePath = decodeURIComponent(encodedPath);
+
+      const fileToDeleteStorageRef = storageRefStandard(storage, storagePath);
+      await deleteObject(fileToDeleteStorageRef);
+      await removeRtdb(databaseRefRtdb(rtdb, `userUploadedFiles/${currentUser.uid}/${file.id}`));
+      toast({ title: "File Deleted", description: `${file.fileName} deleted.` });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Deletion Failed", description: error.message });
+    }
+  };
+
+  const getFileIcon = (contentType: string) => {
+    if (contentType.startsWith('image/')) return <ImageIcon className="h-6 w-6 text-blue-500" />;
+    if (contentType === 'application/pdf') return <FileText className="h-6 w-6 text-red-500" />;
+    return <FileWarning className="h-6 w-6 text-yellow-500" />;
+  };
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
   useEffect(() => { const currentSrc = avatarSrc; return () => { if (currentSrc?.startsWith('blob:')) URL.revokeObjectURL(currentSrc); }; }, [avatarSrc]);
 
   let avatarHint = userProfile.name === 'Guest User' ? "guest avatar placeholder" : "profile avatar";
@@ -406,3 +532,4 @@ export default function ProfilePage() {
     </MainAppLayout>
   );
 }
+
