@@ -34,9 +34,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.manageUserDisabledStatus = exports.manageUserRole = exports.listAllUsers = exports.createUserProfileDocument = void 0;
-const logger = __importStar(require("firebase-functions/logger"));
-const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
+const functions = __importStar(require("firebase-functions")); // Using v1 functions
+const logger = __importStar(require("firebase-functions/logger")); // Using v1 logger
 admin.initializeApp();
 const db = admin.firestore();
 // Auth trigger to create a user profile document in Firestore when a new user signs up
