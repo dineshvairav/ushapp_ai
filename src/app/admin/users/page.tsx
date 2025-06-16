@@ -53,21 +53,23 @@ export default function UserManagementPage() {
             setIsAuthorized(true);
           } else {
             setIsAuthorized(false);
+            toast({ variant: "destructive", title: "Access Denied", description: "You are not authorized to view this page." });
             router.replace('/');
           }
         } catch (error) {
           console.error("Auth check error:", error);
+          toast({ variant: "destructive", title: "Authorization Error", description: "Could not verify your admin status." });
           setIsAuthorized(false);
           router.replace('/');
         }
       } else {
         setIsAuthorized(false);
-        router.replace('/onboarding');
+        router.replace('/onboarding'); // Not logged in, redirect to onboarding
       }
       setIsPageLoading(false);
     });
     return () => unsubscribeAuth();
-  }, [router]);
+  }, [router, toast]);
 
   const fetchUsers = useCallback(async () => {
     if (!isAuthorized) return;
@@ -77,11 +79,20 @@ export default function UserManagementPage() {
       const functions = getFunctions(auth.app);
       const listAllUsersFn = httpsCallable(functions, 'listAllUsers');
       const result = (await listAllUsersFn()) as HttpsCallableResult<ManagedUser[]>;
-      setUsers(result.data || []);
+      
+      if (result.data) {
+        setUsers(result.data);
+      } else {
+        setUsers([]);
+        logger.warn("listAllUsers call returned no data unexpectedly."); // Using logger from Firebase Functions, won't work client-side
+        console.warn("listAllUsers call returned no data unexpectedly from client-side log.");
+      }
+
     } catch (error: any) {
       console.error("Error fetching users:", error);
-      setErrorLoadingUsers(error.message || "Failed to load users from the backend.");
-      toast({ variant: "destructive", title: "Error Loading Users", description: error.message });
+      const errorMessage = error.message || "Failed to load users from the backend.";
+      setErrorLoadingUsers(errorMessage);
+      toast({ variant: "destructive", title: "Error Loading Users", description: errorMessage });
     } finally {
       setIsLoadingUsers(false);
     }
@@ -94,21 +105,29 @@ export default function UserManagementPage() {
   }, [isAuthorized, isPageLoading, fetchUsers]);
 
   const handleToggleRole = async (targetUid: string, roleName: 'isAdmin' | 'isDealer', currentValue: boolean) => {
+    if (currentUser?.uid === targetUid && roleName === 'isAdmin' && currentValue) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Admins cannot revoke their own admin status."});
+      return;
+    }
     try {
       const functions = getFunctions(auth.app);
       const manageUserRoleFn = httpsCallable(functions, 'manageUserRole');
       await manageUserRoleFn({ targetUid, roleName, value: !currentValue });
-      toast({ title: "Role Updated", description: `User ${roleName} status changed.` });
+      toast({ title: "Role Updated", description: `User ${roleName} status changed to ${!currentValue}.` });
       setUsers(prevUsers =>
         prevUsers.map(u => u.uid === targetUid ? { ...u, [roleName]: !currentValue } : u)
       );
     } catch (error: any) {
       console.error(`Error toggling ${roleName} status:`, error);
-      toast({ variant: "destructive", title: `Failed to Update ${roleName}`, description: error.message });
+      toast({ variant: "destructive", title: `Failed to Update ${roleName}`, description: error.message || `Could not update ${roleName}.` });
     }
   };
 
   const handleToggleDisabled = async (targetUid: string, currentValue: boolean) => {
+     if (currentUser?.uid === targetUid) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Admins cannot disable their own account."});
+      return;
+    }
     try {
       const functions = getFunctions(auth.app);
       const manageUserDisabledStatusFn = httpsCallable(functions, 'manageUserDisabledStatus');
@@ -119,16 +138,17 @@ export default function UserManagementPage() {
       );
     } catch (error: any) {
       console.error("Error toggling disabled status:", error);
-      toast({ variant: "destructive", title: "Failed to Update Status", description: error.message });
+      toast({ variant: "destructive", title: "Failed to Update Status", description: error.message || "Could not update user status." });
     }
   };
 
   if (isPageLoading) {
     return (
-      <MainAppLayout><div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div></MainAppLayout>
+      <MainAppLayout><div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-3">Verifying access...</p></div></MainAppLayout>
     );
   }
   if (!isAuthorized) {
+    // This state should ideally be brief as the effect hook redirects.
     return (
       <MainAppLayout><div className="text-center py-10">Access Denied. Redirecting...</div></MainAppLayout>
     );
@@ -143,7 +163,7 @@ export default function UserManagementPage() {
         <Users className="h-10 w-10 text-primary" />
         <div>
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">User Management</h1>
-          <p className="text-lg text-muted-foreground">View, manage roles, and status of users. Roles are now managed via Firestore.</p>
+          <p className="text-lg text-muted-foreground">View, manage roles, and status of users. Roles are managed via Firestore.</p>
         </div>
       </div>
 
@@ -194,7 +214,7 @@ export default function UserManagementPage() {
                       <Switch
                         checked={user.isAdmin}
                         onCheckedChange={() => handleToggleRole(user.uid, 'isAdmin', user.isAdmin)}
-                        disabled={currentUser?.uid === user.uid && user.isAdmin} // Prevent admin from revoking their own admin status
+                        disabled={currentUser?.uid === user.uid && user.isAdmin} 
                         aria-label={user.isAdmin ? "Revoke Admin" : "Grant Admin"}
                       />
                     </TableCell>
@@ -207,9 +227,9 @@ export default function UserManagementPage() {
                     </TableCell>
                     <TableCell className="text-center">
                        <Switch
-                        checked={!user.disabled} // Switch shows "enabled" state
+                        checked={!user.disabled} 
                         onCheckedChange={() => handleToggleDisabled(user.uid, user.disabled)}
-                        disabled={currentUser?.uid === user.uid} // Prevent admin from disabling themselves
+                        disabled={currentUser?.uid === user.uid} 
                         aria-label={user.disabled ? "Enable User" : "Disable User"}
                       />
                     </TableCell>
@@ -219,20 +239,21 @@ export default function UserManagementPage() {
             </Table>
           )}
           {!isLoadingUsers && !errorLoadingUsers && users.length === 0 && (
-            <p className="text-muted-foreground text-center py-10">No users found.</p>
+            <p className="text-muted-foreground text-center py-10">No users found. This might be because no users are registered, or there was an issue fetching them.</p>
           )}
         </CardContent>
       </Card>
-      <div className="mt-6 p-4 bg-accent/10 border border-accent/30 rounded-md text-sm text-accent-foreground/80">
+      <div className="mt-6 p-4 bg-card border border-border/50 rounded-md text-sm">
         <div className="flex items-start gap-3">
-          <BadgeInfo className="h-5 w-5 mt-0.5 text-accent" />
+          <BadgeInfo className="h-5 w-5 mt-0.5 text-primary" />
           <div>
-            <h4 className="font-semibold text-accent">Admin & Role Management Notes:</h4>
-            <ul className="list-disc list-inside pl-1 mt-1 space-y-0.5 text-xs">
-              <li>User roles (`isAdmin`, `isDealer`) are now stored and managed in Firestore (`userProfiles` collection).</li>
-              <li>An Auth trigger (`onCreateUserInFirestore`) automatically creates a Firestore profile for new users with default roles set to false.</li>
-              <li>The first admin user must have their `isAdmin: true` flag set manually in their Firestore profile document.</li>
+            <h4 className="font-semibold text-primary">Admin & Role Management Notes:</h4>
+            <ul className="list-disc list-inside pl-1 mt-1 space-y-0.5 text-xs text-muted-foreground">
+              <li>User roles (`isAdmin`, `isDealer`) are stored in Firestore (`userProfiles` collection).</li>
+              <li>An Auth trigger (`createUserProfileDocument`) automatically creates a Firestore profile for new users with default roles set to false.</li>
+              <li>The first admin user must have their `isAdmin: true` flag set manually in their Firestore profile document (e.g., `userProfiles/ADMIN_UID`).</li>
               <li>Admins cannot revoke their own admin status or disable their own account through this interface.</li>
+              <li>If users are not appearing, check Firebase Function logs for `listAllUsers` and ensure the admin's Firestore profile has `isAdmin: true`.</li>
             </ul>
           </div>
         </div>
@@ -240,3 +261,4 @@ export default function UserManagementPage() {
     </MainAppLayout>
   );
 }
+

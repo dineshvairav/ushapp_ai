@@ -43,10 +43,20 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
   }
 
   const callerUid = context.auth.uid;
+  logger.info(`listAllUsers: Verifying admin status for caller UID: ${callerUid}`);
+
   try {
     const callerProfileDoc = await db.collection("userProfiles").doc(callerUid).get();
-    if (!callerProfileDoc.exists || !callerProfileDoc.data()?.isAdmin) {
-      logger.warn(`listAllUsers: Caller ${callerUid} is not an admin.`);
+    if (!callerProfileDoc.exists) {
+      logger.warn(`listAllUsers: Admin check failed. Firestore profile not found for caller ${callerUid}.`);
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Admin verification failed: Profile not found."
+      );
+    }
+    const callerProfileData = callerProfileDoc.data();
+    if (!callerProfileData?.isAdmin) {
+      logger.warn(`listAllUsers: Caller ${callerUid} is not an admin. isAdmin: ${callerProfileData?.isAdmin}`);
       throw new functions.https.HttpsError(
         "permission-denied",
         "You must be an admin to list users."
@@ -55,10 +65,16 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
     logger.info(`listAllUsers: Caller ${callerUid} verified as admin.`);
 
     const listUsersResult = await admin.auth().listUsers(1000); // Max 1000 users per page
+    logger.info(`listAllUsers: Fetched ${listUsersResult.users.length} users from Firebase Auth.`);
+
     const usersWithProfiles = await Promise.all(
       listUsersResult.users.map(async (userRecord) => {
         const profileDoc = await db.collection("userProfiles").doc(userRecord.uid).get();
         const profileData = profileDoc.exists ? profileDoc.data() : {};
+        // Log if a profile is missing for an auth user, for debugging
+        if (!profileDoc.exists) {
+            logger.warn(`listAllUsers: No Firestore profile found for Auth user UID: ${userRecord.uid}. Using default roles.`);
+        }
         return {
           uid: userRecord.uid,
           email: userRecord.email,
@@ -73,12 +89,16 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
         };
       })
     );
-    logger.info(`listAllUsers: Successfully fetched ${usersWithProfiles.length} users.`);
+    logger.info(`listAllUsers: Successfully processed ${usersWithProfiles.length} users with their profiles.`);
     return usersWithProfiles;
-  } catch (error) {
+  } catch (error: any) {
     logger.error("listAllUsers: Error listing users or fetching profiles:", error);
-    if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError("internal", "An internal error occurred while listing users.");
+    if (error instanceof functions.https.HttpsError) {
+        throw error;
+    }
+    // Provide a more specific message if possible, otherwise a generic internal error
+    const errorMessage = error.message || "An internal error occurred while listing users.";
+    throw new functions.https.HttpsError("internal", errorMessage, error.details);
   }
 });
 
@@ -106,10 +126,17 @@ export const manageUserRole = functions.https.onCall(async (data, context) => {
       "Invalid arguments provided. Required: targetUid (string), roleName ('isAdmin' or 'isDealer'), value (boolean)."
     );
   }
-
+  logger.info(`manageUserRole: Verifying admin status for caller UID: ${callerUid}`);
   try {
     const callerProfileDoc = await db.collection("userProfiles").doc(callerUid).get();
-    if (!callerProfileDoc.exists || !callerProfileDoc.data()?.isAdmin) {
+    if (!callerProfileDoc.exists) {
+        logger.warn(`manageUserRole: Admin check failed. Firestore profile not found for caller ${callerUid}.`);
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Admin verification failed: Profile not found."
+        );
+    }
+    if (!callerProfileDoc.data()?.isAdmin) {
       logger.warn(`manageUserRole: Caller ${callerUid} is not an admin.`);
       throw new functions.https.HttpsError(
         "permission-denied",
@@ -119,14 +146,27 @@ export const manageUserRole = functions.https.onCall(async (data, context) => {
     logger.info(`manageUserRole: Caller ${callerUid} verified as admin.`);
 
     const targetUserProfileRef = db.collection("userProfiles").doc(targetUid);
-    await targetUserProfileRef.update({ [roleName]: value });
+    // Check if target profile exists before updating, create if not (though onCreateUser should handle this)
+    const targetProfileSnap = await targetUserProfileRef.get();
+    if (!targetProfileSnap.exists) {
+        logger.warn(`manageUserRole: Target user profile ${targetUid} does not exist. It should be created by Auth trigger. Proceeding with update attempt.`);
+        // Optionally, you could create a basic profile here if it's missing,
+        // but it's better to rely on the Auth trigger.
+        // For now, we'll let the update proceed; it will create the document if it doesn't exist
+        // with .set({[roleName]: value}, {merge: true}) or fail if not merging and doc doesn't exist.
+        // .update() will fail if doc doesn't exist. Let's use .set with merge.
+         await targetUserProfileRef.set({ [roleName]: value }, { merge: true });
+    } else {
+        await targetUserProfileRef.update({ [roleName]: value });
+    }
+
 
     logger.info(`manageUserRole: Successfully updated ${roleName} to ${value} for user ${targetUid}.`);
     return { success: true, message: `User ${targetUid} ${roleName} status updated to ${value}.` };
-  } catch (error) {
+  } catch (error: any) {
     logger.error(`manageUserRole: Error updating role for user ${targetUid}:`, error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError("internal", `Failed to update ${roleName} for user.`);
+    throw new functions.https.HttpsError("internal", error.message || `Failed to update ${roleName} for user.`);
   }
 });
 
@@ -152,10 +192,17 @@ export const manageUserDisabledStatus = functions.https.onCall(async (data, cont
       "Invalid arguments provided. Required: targetUid (string), disabled (boolean)."
     );
   }
-
+  logger.info(`manageUserDisabledStatus: Verifying admin status for caller UID: ${callerUid}`);
   try {
     const callerProfileDoc = await db.collection("userProfiles").doc(callerUid).get();
-    if (!callerProfileDoc.exists || !callerProfileDoc.data()?.isAdmin) {
+     if (!callerProfileDoc.exists) {
+        logger.warn(`manageUserDisabledStatus: Admin check failed. Firestore profile not found for caller ${callerUid}.`);
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Admin verification failed: Profile not found."
+        );
+    }
+    if (!callerProfileDoc.data()?.isAdmin) {
       logger.warn(`manageUserDisabledStatus: Caller ${callerUid} is not an admin.`);
       throw new functions.https.HttpsError(
         "permission-denied",
@@ -170,9 +217,10 @@ export const manageUserDisabledStatus = functions.https.onCall(async (data, cont
 
     logger.info(`manageUserDisabledStatus: Successfully set disabled status to ${disabled} for user ${targetUid}.`);
     return { success: true, message: `User ${targetUid} disabled status updated to ${disabled}.` };
-  } catch (error) {
+  } catch (error: any) {
     logger.error(`manageUserDisabledStatus: Error updating disabled status for user ${targetUid}:`, error);
     if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError("internal", "Failed to update user disabled status.");
+    throw new functions.https.HttpsError("internal", error.message || "Failed to update user disabled status.");
   }
 });
+    
