@@ -6,11 +6,11 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Product } from '@/data/products';
-import { ArrowRight, Tag, Loader2 } from 'lucide-react'; // Added Loader2
+import { ArrowRight, Tag, Loader2 } from 'lucide-react'; 
 import { useState, useEffect } from 'react';
-import { auth, rtdb, firestore } from '@/lib/firebase'; // Added firestore
+import { auth, rtdb, firestore } from '@/lib/firebase'; 
 import { ref as rtdbRef, onValue as onRtdbValue } from 'firebase/database';
-import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
+import { doc, getDoc } from "firebase/firestore"; 
 import type { User } from 'firebase/auth';
 import type { AppSettings } from '@/app/admin/settings/page';
 
@@ -103,6 +103,7 @@ export function ProductCard({ product }: ProductCardProps) {
             height={400}
             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300 ease-out"
             data-ai-hint={imageHint}
+            priority 
           />
         </Link>
         {isDealerPriceApplied && (

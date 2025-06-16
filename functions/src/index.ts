@@ -32,7 +32,7 @@ export const createUserProfileDocument = functions.auth.user().onCreate(async (u
 
 // Callable function to list all users with their roles from Firestore
 export const listAllUsers = functions.https.onCall(async (data, context) => {
-  logger.info("listAllUsers called by UID:", context.auth?.uid);
+  logger.info("listAllUsers callable function invoked by UID:", context.auth?.uid);
 
   if (!context.auth || !context.auth.uid) {
     logger.error("listAllUsers: Authentication token not available or UID missing.");
@@ -67,45 +67,50 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
     const listUsersResult = await admin.auth().listUsers(1000); // Max 1000 users per page
     logger.info(`listAllUsers: Fetched ${listUsersResult.users.length} users from Firebase Auth.`);
 
-    const usersWithProfiles = await Promise.all(
-      listUsersResult.users.map(async (userRecord) => {
-        let profileData: admin.firestore.DocumentData | {} = {};
-        try {
-            const profileDoc = await db.collection("userProfiles").doc(userRecord.uid).get();
-            if (profileDoc.exists) {
-                profileData = profileDoc.data() || {};
-            } else {
-                logger.warn(`listAllUsers: No Firestore profile found for Auth user UID: ${userRecord.uid}. Using default roles.`);
-            }
-        } catch (profileError) {
-            logger.error(`listAllUsers: Error fetching profile for UID ${userRecord.uid}:`, profileError);
-            // Continue with default roles if a single profile fetch fails
-        }
-        return {
-          uid: userRecord.uid,
-          email: userRecord.email,
-          displayName: userRecord.displayName,
-          photoURL: userRecord.photoURL,
-          disabled: userRecord.disabled,
-          creationTime: userRecord.metadata.creationTime,
-          lastSignInTime: userRecord.metadata.lastSignInTime,
-          isAdmin: (profileData as any)?.isAdmin || false,
-          isDealer: (profileData as any)?.isDealer || false,
-          phone: (profileData as any)?.phone || null,
-        };
-      })
-    );
+    const usersWithProfilesPromises = listUsersResult.users.map(async (userRecord) => {
+      let profileData: admin.firestore.DocumentData = {};
+      try {
+          const profileDoc = await db.collection("userProfiles").doc(userRecord.uid).get();
+          if (profileDoc.exists) {
+              profileData = profileDoc.data() || {};
+          } else {
+              logger.warn(`listAllUsers: No Firestore profile found for Auth user UID: ${userRecord.uid}. Using default roles.`);
+          }
+      } catch (profileError: any) {
+          logger.error(`listAllUsers: Error fetching profile for UID ${userRecord.uid}. Message: ${profileError.message}. Stack: ${profileError.stack}`);
+          // Continue with default roles if a single profile fetch fails
+      }
+      return {
+        uid: userRecord.uid,
+        email: userRecord.email,
+        displayName: userRecord.displayName,
+        photoURL: userRecord.photoURL,
+        disabled: userRecord.disabled,
+        creationTime: userRecord.metadata.creationTime,
+        lastSignInTime: userRecord.metadata.lastSignInTime,
+        isAdmin: (profileData as any)?.isAdmin || false,
+        isDealer: (profileData as any)?.isDealer || false,
+        phone: (profileData as any)?.phone || null,
+      };
+    });
+    
+    const usersWithProfiles = await Promise.all(usersWithProfilesPromises);
     logger.info(`listAllUsers: Successfully processed ${usersWithProfiles.length} users with their profiles.`);
     return usersWithProfiles;
+
   } catch (error: any) {
-    logger.error("listAllUsers: Unexpected error occurred:", error);
+    logger.error("listAllUsers: Top-level unexpected error occurred. Message:", error.message, "Stack:", error.stack, "Details:", JSON.stringify(error.details));
     if (error instanceof functions.https.HttpsError) {
-        // If it's already an HttpsError, rethrow it
+        // Re-throw HttpsError to be correctly handled by the client
         throw error;
     }
-    // For other errors, wrap it in an HttpsError
-    const errorMessage = error.message || "An unexpected internal error occurred while listing users.";
-    throw new functions.https.HttpsError("internal", errorMessage, {originalError: error.toString()});
+    // For other errors, wrap it in an HttpsError, ensuring the message is a string
+    const errorMessage = typeof error.message === 'string' ? error.message : "An unexpected internal error occurred while listing users.";
+    const errorDetails = {
+        originalError: typeof error.toString === 'function' ? error.toString() : "Error object could not be stringified.",
+        stack: typeof error.stack === 'string' ? error.stack : "No stack trace available."
+    };
+    throw new functions.https.HttpsError("internal", errorMessage, errorDetails);
   }
 });
 
@@ -153,20 +158,13 @@ export const manageUserRole = functions.https.onCall(async (data, context) => {
     logger.info(`manageUserRole: Caller ${callerUid} verified as admin.`);
 
     const targetUserProfileRef = db.collection("userProfiles").doc(targetUid);
-    // Check if target profile exists before updating, create if not (though onCreateUser should handle this)
     const targetProfileSnap = await targetUserProfileRef.get();
     if (!targetProfileSnap.exists) {
-        logger.warn(`manageUserRole: Target user profile ${targetUid} does not exist. It should be created by Auth trigger. Proceeding with update attempt.`);
-        // Optionally, you could create a basic profile here if it's missing,
-        // but it's better to rely on the Auth trigger.
-        // For now, we'll let the update proceed; it will create the document if it doesn't exist
-        // with .set({[roleName]: value}, {merge: true}) or fail if not merging and doc doesn't exist.
-        // .update() will fail if doc doesn't exist. Let's use .set with merge.
+        logger.warn(`manageUserRole: Target user profile ${targetUid} does not exist. It should be created by Auth trigger. Proceeding with update attempt by setting with merge.`);
          await targetUserProfileRef.set({ [roleName]: value }, { merge: true });
     } else {
         await targetUserProfileRef.update({ [roleName]: value });
     }
-
 
     logger.info(`manageUserRole: Successfully updated ${roleName} to ${value} for user ${targetUid}.`);
     return { success: true, message: `User ${targetUid} ${roleName} status updated to ${value}.` };
@@ -219,7 +217,6 @@ export const manageUserDisabledStatus = functions.https.onCall(async (data, cont
     logger.info(`manageUserDisabledStatus: Caller ${callerUid} verified as admin.`);
 
     await admin.auth().updateUser(targetUid, { disabled });
-    // Also update the disabled status in their Firestore profile for consistency
     await db.collection("userProfiles").doc(targetUid).update({ disabled });
 
     logger.info(`manageUserDisabledStatus: Successfully set disabled status to ${disabled} for user ${targetUid}.`);
@@ -231,5 +228,4 @@ export const manageUserDisabledStatus = functions.https.onCall(async (data, cont
   }
 });
     
-
     
