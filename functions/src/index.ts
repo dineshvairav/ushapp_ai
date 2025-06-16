@@ -7,10 +7,9 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-// import {onRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
-import { onUserCreated, type UserRecord } from "firebase-functions/v2/auth";
+import { onUserCreated, type UserRecord, type AuthEventData } from "firebase-functions/v2/auth"; // Corrected import for UserRecord and added AuthEventData
 import { onCall, HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 
 
@@ -31,8 +30,8 @@ interface ManageUserDisabledStatusData {
 }
 
 // Auth trigger (v2) to create a user profile document in Firestore when a new user signs up
-export const createUserProfileDocument = onUserCreated(async (event) => {
-  const user = event.data as UserRecord; // The user object is in event.data
+export const createUserProfileDocument = onUserCreated(async (event: AuthEventData<UserRecord>) => { // Correct event type
+  const user = event.data; // The user object is in event.data
   logger.info(`New user created (v2): UID: ${user.uid}, Email: ${user.email}`);
   const userProfileRef = db.collection("userProfiles").doc(user.uid);
 
@@ -255,3 +254,4 @@ export const manageUserDisabledStatus = onCall(async (request: CallableRequest<M
     throw new HttpsError("internal", error.message || "Failed to update user disabled status.");
   }
 });
+
