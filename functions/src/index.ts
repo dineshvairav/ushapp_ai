@@ -69,11 +69,17 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
 
     const usersWithProfiles = await Promise.all(
       listUsersResult.users.map(async (userRecord) => {
-        const profileDoc = await db.collection("userProfiles").doc(userRecord.uid).get();
-        const profileData = profileDoc.exists ? profileDoc.data() : {};
-        // Log if a profile is missing for an auth user, for debugging
-        if (!profileDoc.exists) {
-            logger.warn(`listAllUsers: No Firestore profile found for Auth user UID: ${userRecord.uid}. Using default roles.`);
+        let profileData: admin.firestore.DocumentData | {} = {};
+        try {
+            const profileDoc = await db.collection("userProfiles").doc(userRecord.uid).get();
+            if (profileDoc.exists) {
+                profileData = profileDoc.data() || {};
+            } else {
+                logger.warn(`listAllUsers: No Firestore profile found for Auth user UID: ${userRecord.uid}. Using default roles.`);
+            }
+        } catch (profileError) {
+            logger.error(`listAllUsers: Error fetching profile for UID ${userRecord.uid}:`, profileError);
+            // Continue with default roles if a single profile fetch fails
         }
         return {
           uid: userRecord.uid,
@@ -83,22 +89,23 @@ export const listAllUsers = functions.https.onCall(async (data, context) => {
           disabled: userRecord.disabled,
           creationTime: userRecord.metadata.creationTime,
           lastSignInTime: userRecord.metadata.lastSignInTime,
-          isAdmin: profileData?.isAdmin || false,
-          isDealer: profileData?.isDealer || false,
-          phone: profileData?.phone || null,
+          isAdmin: (profileData as any)?.isAdmin || false,
+          isDealer: (profileData as any)?.isDealer || false,
+          phone: (profileData as any)?.phone || null,
         };
       })
     );
     logger.info(`listAllUsers: Successfully processed ${usersWithProfiles.length} users with their profiles.`);
     return usersWithProfiles;
   } catch (error: any) {
-    logger.error("listAllUsers: Error listing users or fetching profiles:", error);
+    logger.error("listAllUsers: Unexpected error occurred:", error);
     if (error instanceof functions.https.HttpsError) {
+        // If it's already an HttpsError, rethrow it
         throw error;
     }
-    // Provide a more specific message if possible, otherwise a generic internal error
-    const errorMessage = error.message || "An internal error occurred while listing users.";
-    throw new functions.https.HttpsError("internal", errorMessage, error.details);
+    // For other errors, wrap it in an HttpsError
+    const errorMessage = error.message || "An unexpected internal error occurred while listing users.";
+    throw new functions.https.HttpsError("internal", errorMessage, {originalError: error.toString()});
   }
 });
 
@@ -223,4 +230,6 @@ export const manageUserDisabledStatus = functions.https.onCall(async (data, cont
     throw new functions.https.HttpsError("internal", error.message || "Failed to update user disabled status.");
   }
 });
+    
+
     
