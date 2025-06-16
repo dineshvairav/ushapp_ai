@@ -32,10 +32,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.manageUserDisabledStatus = exports.manageUserRole = exports.listAllUsers = exports.createUserProfileDocument = void 0;
-// import {onRequest} from "firebase-functions/v2/https";
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
-const auth_1 = require("firebase-functions/v2/auth");
+const auth_1 = require("firebase-functions/v2/auth"); // Corrected import for UserRecord and added AuthEventData
 const https_1 = require("firebase-functions/v2/https");
 admin.initializeApp();
 const db = admin.firestore();

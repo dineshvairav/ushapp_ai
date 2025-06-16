@@ -1,3 +1,4 @@
+
 /**
  * Import function triggers from their respective submodules:
  *
@@ -254,4 +255,3 @@ export const manageUserDisabledStatus = onCall(async (request: CallableRequest<M
     throw new HttpsError("internal", error.message || "Failed to update user disabled status.");
   }
 });
-
