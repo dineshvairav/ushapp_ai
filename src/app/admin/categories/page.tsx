@@ -13,12 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Category } from '@/data/categories';
 import { ArrowLeft, ListTree, PlusCircle, Trash2, Loader2, AlertTriangle } from 'lucide-react';
-import { rtdb, auth } from '@/lib/firebase';
+import { rtdb, auth, firestore } from '@/lib/firebase'; // Added firestore
 import { ref, onValue, push, set, remove } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+// const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // No longer primary check
 
 export default function CategoryManagementPage() {
   const router = useRouter();
@@ -37,12 +38,24 @@ export default function CategoryManagementPage() {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAuthorized(true);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isAdmin === true) {
+            setIsAuthorized(true);
+          } else {
+            setIsAuthorized(false);
+            router.replace('/');
+          }
+        } catch (error) {
+          setIsAuthorized(false);
+          router.replace('/');
+        }
       } else {
         setIsAuthorized(false);
-        router.replace(user ? '/' : '/onboarding');
+        router.replace('/onboarding');
       }
       setIsAdminLoading(false);
     });
@@ -50,7 +63,7 @@ export default function CategoryManagementPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!isAuthorized && !isAdminLoading) return; // Don't fetch if not authorized
+    if (!isAuthorized || isAdminLoading) return; 
 
     const categoriesRef = ref(rtdb, 'categories');
     const unsubscribeCategories = onValue(categoriesRef, (snapshot) => {

@@ -6,10 +6,11 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Product } from '@/data/products';
-import { ArrowRight, Tag } from 'lucide-react';
+import { ArrowRight, Tag, Loader2 } from 'lucide-react'; // Added Loader2
 import { useState, useEffect } from 'react';
-import { rtdb, auth } from '@/lib/firebase';
-import { ref, onValue } from 'firebase/database';
+import { auth, rtdb, firestore } from '@/lib/firebase'; // Added firestore
+import { ref as rtdbRef, onValue as onRtdbValue } from 'firebase/database';
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 import type { User } from 'firebase/auth';
 import type { AppSettings } from '@/app/admin/settings/page';
 
@@ -27,22 +28,16 @@ export function ProductCard({ product }: ProductCardProps) {
     imageHint = firstImage.hint.split(' ').slice(0, 2).join(' ');
   }
 
-
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isDealer, setIsDealer] = useState(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoadingAuthAndRoles, setIsLoadingAuthAndRoles] = useState(true);
   const [currencySymbol, setCurrencySymbol] = useState(defaultCurrencySymbol);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   useEffect(() => {
-    const settingsRef = ref(rtdb, 'appSettings');
-    const unsubscribeSettings = onValue(settingsRef, (snapshot) => {
+    const settingsDbRef = rtdbRef(rtdb, 'appSettings');
+    const unsubscribeSettings = onRtdbValue(settingsDbRef, (snapshot) => {
       const data = snapshot.val() as AppSettings | null;
-      if (data && data.currencySymbol) {
-        setCurrencySymbol(data.currencySymbol);
-      } else {
-        setCurrencySymbol(defaultCurrencySymbol);
-      }
+      setCurrencySymbol(data?.currencySymbol || defaultCurrencySymbol);
       setIsLoadingSettings(false);
     }, () => {
       setCurrencySymbol(defaultCurrencySymbol);
@@ -50,20 +45,20 @@ export function ProductCard({ product }: ProductCardProps) {
     });
 
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      setIsLoadingAuthAndRoles(true);
       if (user) {
-        setCurrentUser(user);
         try {
-          const idTokenResult = await user.getIdTokenResult(true); 
-          setIsDealer(idTokenResult.claims.isDealer === true);
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          setIsDealer(docSnap.exists() && docSnap.data().isDealer === true);
         } catch (error) {
-          console.error("Error fetching custom claims for product card:", error);
+          console.error("Error fetching user dealer status for product card:", error);
           setIsDealer(false);
         }
       } else {
-        setCurrentUser(null);
         setIsDealer(false);
       }
-      setIsLoadingAuth(false);
+      setIsLoadingAuthAndRoles(false);
     });
 
     return () => {
@@ -75,29 +70,27 @@ export function ProductCard({ product }: ProductCardProps) {
   let actualSellingPrice: number | null = null;
   let mrpStrikethroughValue: number | null = null;
   let shouldShowMrpStrikethrough = false;
+  let isDealerPriceApplied = false;
 
-  if (!isLoadingAuth && !isLoadingSettings) {
+  if (!isLoadingAuthAndRoles && !isLoadingSettings) {
     if (isDealer && product.dp != null && !isNaN(Number(product.dp))) {
       actualSellingPrice = Number(product.dp);
-      // Dealers see their price directly, no M.R.P. strikethrough for now.
+      isDealerPriceApplied = true;
     } else {
-      // This block handles non-dealers, or dealers if their DP isn't valid/set.
       if (product.mop != null && !isNaN(Number(product.mop))) {
         actualSellingPrice = Number(product.mop);
-        if (product.price > actualSellingPrice) { // Only show original price as strikethrough if it's higher than MOP
+        if (product.price > actualSellingPrice) {
           mrpStrikethroughValue = product.price;
           shouldShowMrpStrikethrough = true;
         }
       } else {
-        actualSellingPrice = product.price; // Fallback to original price if MOP is not available
+        actualSellingPrice = product.price;
       }
     }
-     // Ensure actualSellingPrice has a fallback if all else fails (e.g. bad data)
     if (actualSellingPrice === null) {
         actualSellingPrice = product.price;
     }
   }
-
 
   return (
     <Card className="overflow-hidden h-full flex flex-col bg-card border-border hover:shadow-xl hover:border-primary/50 transition-all duration-300 ease-out rounded-lg group">
@@ -112,7 +105,7 @@ export function ProductCard({ product }: ProductCardProps) {
             data-ai-hint={imageHint}
           />
         </Link>
-        {isDealer && product.dp != null && !isNaN(Number(product.dp)) && (
+        {isDealerPriceApplied && (
           <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 text-xs font-semibold rounded-md flex items-center shadow-lg">
             <Tag size={12} className="mr-1" /> Dealer Price
           </div>
@@ -125,8 +118,11 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
           {product.description}
         </p>
-        {isLoadingSettings || isLoadingAuth || actualSellingPrice === null ? (
-             <div className="h-7 w-20 bg-muted rounded animate-pulse my-1"></div>
+        {isLoadingSettings || isLoadingAuthAndRoles || actualSellingPrice === null ? (
+             <div className="flex items-center">
+                <Loader2 className="h-5 w-5 text-primary animate-spin mr-2" /> 
+                <div className="h-6 w-16 bg-muted rounded animate-pulse"></div>
+             </div>
         ) : (
         <>
             <p className="text-xl font-bold text-primary">

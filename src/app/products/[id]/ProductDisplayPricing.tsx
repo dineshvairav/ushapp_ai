@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Star, Tag, Loader2 } from 'lucide-react';
 import type { Product } from '@/data/products';
-import { auth, rtdb } from '@/lib/firebase';
-import { ref, onValue } from 'firebase/database';
+import { auth, rtdb, firestore } from '@/lib/firebase'; // Added firestore
+import { ref as rtdbRef, onValue as onRtdbValue } from 'firebase/database';
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 import type { User } from 'firebase/auth';
 import type { AppSettings } from '@/app/admin/settings/page';
-import type { Category } from '@/data/categories'; // Assuming Category type is needed for category name
+import type { Category } from '@/data/categories';
 
 interface ProductDisplayPricingProps {
   product: Product;
@@ -21,7 +22,7 @@ const defaultCurrencySymbol = '₹';
 export default function ProductDisplayPricing({ product }: ProductDisplayPricingProps) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isDealer, setIsDealer] = useState(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoadingAuthAndRoles, setIsLoadingAuthAndRoles] = useState(true);
   const [currencySymbol, setCurrencySymbol] = useState(defaultCurrencySymbol);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [categoryName, setCategoryName] = useState<string | null>(null);
@@ -29,51 +30,50 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
 
   useEffect(() => {
     // Fetch App Settings (Currency Symbol)
-    const settingsRef = ref(rtdb, 'appSettings');
-    const unsubscribeSettings = onValue(settingsRef, (snapshot) => {
+    const settingsDbRef = rtdbRef(rtdb, 'appSettings');
+    const unsubscribeSettings = onRtdbValue(settingsDbRef, (snapshot) => {
       const data = snapshot.val() as AppSettings | null;
-      if (data && data.currencySymbol) {
-        setCurrencySymbol(data.currencySymbol);
-      } else {
-        setCurrencySymbol(defaultCurrencySymbol);
-      }
+      setCurrencySymbol(data?.currencySymbol || defaultCurrencySymbol);
       setIsLoadingSettings(false);
     }, () => {
       setCurrencySymbol(defaultCurrencySymbol);
       setIsLoadingSettings(false);
     });
 
-    // Auth State Change Listener
+    // Auth State Change Listener & Firestore Role Fetch
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      setIsLoadingAuthAndRoles(true);
       if (user) {
         setCurrentUser(user);
         try {
-          const idTokenResult = await user.getIdTokenResult(true);
-          setIsDealer(idTokenResult.claims.isDealer === true);
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isDealer === true) {
+            setIsDealer(true);
+          } else {
+            setIsDealer(false);
+          }
         } catch (error) {
-          console.error("Error fetching custom claims:", error);
+          console.error("Error fetching user dealer status from Firestore:", error);
           setIsDealer(false);
         }
       } else {
         setCurrentUser(null);
         setIsDealer(false);
       }
-      setIsLoadingAuth(false);
+      setIsLoadingAuthAndRoles(false);
     });
 
     // Fetch Category Name
     if (product.category) {
-      const categoryRef = ref(rtdb, `categories/${product.category}`);
-      const unsubscribeCategory = onValue(categoryRef, (snapshot) => {
+      setIsLoadingCategory(true);
+      const categoryDbRef = rtdbRef(rtdb, `categories/${product.category}`);
+      const unsubscribeCategory = onRtdbValue(categoryDbRef, (snapshot) => {
         const catData = snapshot.val() as Category | null;
-        if (catData && catData.name) {
-          setCategoryName(catData.name);
-        } else {
-          setCategoryName(product.category); // Fallback to ID if name not found
-        }
+        setCategoryName(catData?.name || product.category);
         setIsLoadingCategory(false);
       }, () => {
-        setCategoryName(product.category); // Fallback on error
+        setCategoryName(product.category);
         setIsLoadingCategory(false);
       });
        return () => {
@@ -83,7 +83,6 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
       };
     }
 
-
     return () => {
       unsubscribeAuth();
       unsubscribeSettings();
@@ -91,45 +90,38 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
   }, [product.category]);
 
   let actualSellingPrice: number | null = null;
-  let originalMrpDisplayValue: number | null = null; // This will hold product.price for strikethrough
+  let originalMrpDisplayValue: number | null = null;
   let shouldShowOriginalMrpStrikethrough = false;
   let isDealerPriceApplied = false;
 
-  if (!isLoadingAuth && !isLoadingSettings) {
+  if (!isLoadingAuthAndRoles && !isLoadingSettings) {
     if (isDealer && product.dp != null && !isNaN(Number(product.dp))) {
       actualSellingPrice = Number(product.dp);
       isDealerPriceApplied = true;
-      // For dealers, we don't show a strikethrough M.R.P (product.price) currently.
-      // If product.price needs to be shown as M.R.P for dealers, logic would be added here.
     } else {
-      // Logic for non-dealers (Guests and Logged-in Non-Dealer Users)
       if (product.mop != null && !isNaN(Number(product.mop))) {
         actualSellingPrice = Number(product.mop);
-        if (product.price > actualSellingPrice) { // Only show original price as strikethrough if it's higher than MOP
+        if (product.price > actualSellingPrice) {
           originalMrpDisplayValue = product.price;
           shouldShowOriginalMrpStrikethrough = true;
         }
       } else {
-        // Fallback if MOP is not set or invalid: selling price is product.price
         actualSellingPrice = product.price;
       }
     }
-
-    // Final fallback if actualSellingPrice is still null (e.g., all prices are invalid/missing)
     if (actualSellingPrice === null) {
-      actualSellingPrice = product.price; // Default to product.price
+      actualSellingPrice = product.price;
     }
   }
 
-
-  if (isLoadingAuth || isLoadingSettings || isLoadingCategory || actualSellingPrice === null) {
+  if (isLoadingAuthAndRoles || isLoadingSettings || isLoadingCategory || actualSellingPrice === null) {
     return (
       <div className="py-4">
-        <div className="h-6 w-1/4 bg-muted rounded animate-pulse mb-2"></div> {/* Category placeholder */}
-        <div className="h-10 w-3/4 bg-muted rounded animate-pulse mb-3"></div> {/* Name placeholder */}
-        <div className="h-8 w-1/3 bg-muted rounded animate-pulse mb-3"></div> {/* Price placeholder */}
-        <div className="h-5 w-1/4 bg-muted rounded animate-pulse mb-1"></div> {/* M.R.P placeholder */}
-        <div className="h-6 w-1/2 bg-muted rounded animate-pulse mb-6"></div> {/* Stock placeholder */}
+        <div className="h-6 w-1/4 bg-muted rounded animate-pulse mb-2"></div>
+        <div className="h-10 w-3/4 bg-muted rounded animate-pulse mb-3"></div>
+        <div className="h-8 w-1/3 bg-muted rounded animate-pulse mb-3"></div>
+        <div className="h-5 w-1/4 bg-muted rounded animate-pulse mb-1"></div>
+        <div className="h-6 w-1/2 bg-muted rounded animate-pulse mb-6"></div>
         <Button size="lg" className="w-full sm:w-auto" disabled>
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading...
         </Button>
@@ -170,10 +162,9 @@ export default function ProductDisplayPricing({ product }: ProductDisplayPricing
           <Tag size={14} className="mr-1.5" /> Dealer Price Applied
         </div>
       )}
-       {!isLoadingAuth && !currentUser && product.dp && (
+       {!isLoadingAuthAndRoles && !currentUser && product.dp && (
          <p className="text-xs text-muted-foreground mb-4">(Special dealer pricing available for registered dealers)</p>
        )}
-
 
       <p className="text-base text-muted-foreground mb-6 leading-relaxed">{product.description}</p>
 

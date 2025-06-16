@@ -12,13 +12,15 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, UploadCloud, FileIcon, Trash2, Loader2, AlertTriangle, Download, Copy, UserCheck } from 'lucide-react';
-import { auth, rtdb, app as firebaseApp } from '@/lib/firebase';
+import { auth, rtdb, firestore, app as firebaseApp } from '@/lib/firebase'; // Added firestore
 import { getStorage, ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { ref as databaseRef, onValue, push, set, remove } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+
+// const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // No longer primary check
 const ACCEPTED_FILE_TYPES = "image/jpeg, image/png, image/gif, application/pdf, .pdf";
 const TARGET_STORAGE_BUCKET = "gs://ushapp-af453.firebasestorage.app";
 
@@ -59,13 +61,25 @@ export default function FileUploadPage() {
   const [errorFiles, setErrorFiles] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAuthorized(true);
+      if (user) {
+        try {
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isAdmin === true) {
+            setIsAuthorized(true);
+          } else {
+            setIsAuthorized(false);
+            router.replace('/');
+          }
+        } catch (error) {
+          setIsAuthorized(false);
+          router.replace('/');
+        }
       } else {
         setIsAuthorized(false);
-        router.replace(user ? '/' : '/onboarding');
+        router.replace('/onboarding');
       }
       setIsAdminLoading(false);
     });
@@ -73,7 +87,7 @@ export default function FileUploadPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!isAuthorized && !isAdminLoading) return;
+    if (!isAuthorized || isAdminLoading) return;
 
     const filesDbRef = databaseRef(rtdb, 'adminUploadedFiles');
     const unsubscribeFiles = onValue(filesDbRef, (snapshot) => {
@@ -264,10 +278,7 @@ export default function FileUploadPage() {
       const pathSegments = url.pathname.split('/o/');
       if (pathSegments.length <= 1) throw new Error("Cannot determine storage path from download URL.");
       
-      // Ensure path starts after the bucket name part in the pathname.
-      // Example pathname: /v0/b/ushapp-af453.appspot.com/o/adminUploads%2F1719999999999-example.pdf
-      // We need to extract "adminUploads%2F1719999999999-example.pdf" then decode it.
-      const encodedPath = pathSegments[1].split('?')[0]; // Remove query params like alt=media&token=...
+      const encodedPath = pathSegments[1].split('?')[0]; 
       if (!encodedPath) throw new Error("Storage path for deletion is empty or malformed.");
       const storagePath = decodeURIComponent(encodedPath);
       
@@ -326,8 +337,8 @@ export default function FileUploadPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8"> {/* Changed grid to 2 columns */}
-        <Card className="lg:col-span-1 border-border shadow-lg"> {/* Upload for Guest */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="lg:col-span-1 border-border shadow-lg"> 
           <CardHeader>
             <CardTitle className="text-xl text-primary flex items-center gap-2"><UserCheck className="h-6 w-6" /> Upload File for Guest</CardTitle>
             <CardDescription>Upload a file (PDF, image) for a specific guest identified by phone number.</CardDescription>
@@ -375,7 +386,7 @@ export default function FileUploadPage() {
           </form>
         </Card>
 
-        <Card className="lg:col-span-1 border-border shadow-lg"> {/* Upload General File */}
+        <Card className="lg:col-span-1 border-border shadow-lg"> 
           <CardHeader>
             <CardTitle className="text-xl text-primary flex items-center gap-2"><UploadCloud className="h-6 w-6" /> Upload General File</CardTitle>
             <CardDescription>Upload an image or PDF to be shared with all users.</CardDescription>
@@ -411,7 +422,6 @@ export default function FileUploadPage() {
         </Card>
       </div>
       
-      {/* Table for general uploaded files, taking full width below the two cards */}
       <div className="mt-8">
         {isLoadingFiles && (
           <div className="flex flex-col items-center justify-center min-h-[30vh] bg-card border border-border rounded-xl shadow-lg p-6">

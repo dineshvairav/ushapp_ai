@@ -11,12 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ArrowLeft, Settings, Save, Loader2, AlertTriangle } from 'lucide-react';
-import { rtdb, auth } from '@/lib/firebase';
+import { rtdb, auth, firestore } from '@/lib/firebase'; // Added firestore
 import { ref, onValue, set } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+// const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // No longer primary check
 
 export interface AppSettings {
   currencySymbol: string;
@@ -47,12 +48,24 @@ export default function AppSettingsPage() {
   const [errorSettings, setErrorSettings] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAuthorized(true);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isAdmin === true) {
+            setIsAuthorized(true);
+          } else {
+            setIsAuthorized(false);
+            router.replace('/');
+          }
+        } catch (error) {
+          setIsAuthorized(false);
+          router.replace('/');
+        }
       } else {
         setIsAuthorized(false);
-        router.replace(user ? '/' : '/onboarding');
+        router.replace('/onboarding');
       }
       setIsAdminLoading(false);
     });
@@ -60,7 +73,7 @@ export default function AppSettingsPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!isAuthorized && !isAdminLoading) return;
+    if (!isAuthorized || isAdminLoading) return;
 
     const settingsRef = ref(rtdb, 'appSettings');
     const unsubscribeSettings = onValue(settingsRef, (snapshot) => {
@@ -276,4 +289,3 @@ export default function AppSettingsPage() {
     </MainAppLayout>
   );
 }
-

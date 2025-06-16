@@ -9,9 +9,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { FileText, MessageSquare, Image as ImageIcon, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase';
+import { auth, firestore } from '@/lib/firebase'; // Added firestore
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+
+// const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // No longer primary check
 
 export default function ContentManagementPage() {
   const router = useRouter();
@@ -19,12 +21,24 @@ export default function ContentManagementPage() {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAuthorized(true);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isAdmin === true) {
+            setIsAuthorized(true);
+          } else {
+            setIsAuthorized(false);
+            router.replace('/');
+          }
+        } catch (error) {
+          setIsAuthorized(false);
+          router.replace('/');
+        }
       } else {
         setIsAuthorized(false);
-        router.replace(user ? '/' : '/onboarding');
+        router.replace('/onboarding');
       }
       setIsLoading(false);
     });

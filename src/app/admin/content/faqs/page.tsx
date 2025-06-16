@@ -14,12 +14,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { FAQ } from '@/data/contentTypes';
 import { ArrowLeft, PlusCircle, Trash2, Loader2, AlertTriangle, MessageSquare } from 'lucide-react';
-import { rtdb, auth } from '@/lib/firebase';
+import { rtdb, auth, firestore } from '@/lib/firebase'; // Added firestore
 import { ref, onValue, push, set, remove, update } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+// const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // No longer primary check
 
 export default function FaqManagementPage() {
   const router = useRouter();
@@ -38,12 +39,24 @@ export default function FaqManagementPage() {
   const [isAddingFaq, setIsAddingFaq] = useState(false);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAuthorized(true);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isAdmin === true) {
+            setIsAuthorized(true);
+          } else {
+            setIsAuthorized(false);
+            router.replace('/');
+          }
+        } catch (error) {
+          setIsAuthorized(false);
+          router.replace('/');
+        }
       } else {
         setIsAuthorized(false);
-        router.replace(user ? '/' : '/onboarding');
+        router.replace('/onboarding');
       }
       setIsAdminLoading(false);
     });
@@ -51,7 +64,7 @@ export default function FaqManagementPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!isAuthorized && !isAdminLoading) return;
+    if (!isAuthorized || isAdminLoading) return;
 
     const faqsRef = ref(rtdb, 'content/faqs');
     const unsubscribeFaqs = onValue(faqsRef, (snapshot) => {
@@ -301,5 +314,4 @@ export default function FaqManagementPage() {
     </MainAppLayout>
   );
 }
-
     

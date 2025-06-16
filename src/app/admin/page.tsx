@@ -9,9 +9,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Users, Package, LineChart, ShieldCheck, Settings, FileText, Percent, ListTree, Loader2, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth } from '@/lib/firebase';
+import { auth, firestore } from '@/lib/firebase'; // Added firestore
+import { doc, getDoc } from "firebase/firestore"; // Added firestore imports
 
-const ADMIN_EMAIL = 'dineshvairav@gmail.com';
+// const ADMIN_EMAIL = 'dineshvairav@gmail.com'; // No longer primary check
 
 export default function AdminPage() {
   const router = useRouter();
@@ -20,18 +21,28 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
-        const isAdmin = user.email === ADMIN_EMAIL;
-        setIsAuthorized(isAdmin);
-        if (!isAdmin) {
+        // Check Firestore for admin role
+        try {
+          const userProfileRef = doc(firestore, "userProfiles", user.uid);
+          const docSnap = await getDoc(userProfileRef);
+          if (docSnap.exists() && docSnap.data().isAdmin === true) {
+            setIsAuthorized(true);
+          } else {
+            setIsAuthorized(false);
+            router.replace('/'); // Not admin, redirect to home
+          }
+        } catch (error) {
+          console.error("Error fetching user admin status:", error);
+          setIsAuthorized(false);
           router.replace('/');
         }
       } else {
         setCurrentUser(null);
         setIsAuthorized(false);
-        router.replace('/onboarding');
+        router.replace('/onboarding'); // Not logged in, redirect to onboarding
       }
       setIsLoading(false);
     });
@@ -51,6 +62,7 @@ export default function AdminPage() {
   }
 
   if (!isAuthorized) {
+    // This should ideally not be reached if redirects work correctly
     return (
       <MainAppLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -204,17 +216,9 @@ export default function AdminPage() {
       <div className="mt-12 p-6 bg-card border border-border rounded-xl shadow-lg">
         <h3 className="text-xl font-semibold text-primary mb-3">Important Security Note</h3>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          This admin dashboard currently uses a <strong className="text-foreground">client-side email check</strong> for authorization.
-          In a real-world application, access to this page and its functionalities
-          <strong className="text-foreground"> must be strictly controlled with server-side checks and robust role management (e.g., Firebase Custom Claims)</strong>.
-        </p>
-        <ul className="list-disc list-inside text-sm text-muted-foreground mt-2 space-y-1 pl-2">
-          <li><strong className="text-foreground">Firebase Authentication:</strong> Ensure only logged-in users can attempt to access this page. (This is now partially implemented).</li>
-          <li><strong className="text-foreground">Firebase Custom Claims / Backend Role Verification:</strong> The recommended approach. Verify that the logged-in user has administrative privileges (e.g., an "admin" custom claim). This check should happen on the backend or be securely verifiable on the client.</li>
-          <li><strong className="text-foreground">Secure Endpoints:</strong> Any actions performed from this dashboard (like updating products or user roles) must also be secured on the backend, verifying admin privileges for each request using the Firebase Admin SDK.</li>
-        </ul>
-        <p className="text-sm text-muted-foreground mt-3">
-          The current client-side email check is for demonstration and is <strong className="text-destructive">not suitable for production security</strong>.
+          Admin access is now managed via Firestore user profiles (`isAdmin` flag).
+          Ensure Firestore security rules are configured to protect the `userProfiles` collection,
+          allowing only admins or backend functions to modify roles.
         </p>
       </div>
     </MainAppLayout>
