@@ -1,2 +1,2 @@
-import { onUserCreated } from "firebase-functions/v2/auth";
-console.log(onUserCreated);
+// This file is intentionally left blank or can be removed.
+// It was used for diagnostics and is no longer needed for this step.
